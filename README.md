@@ -1,5 +1,7 @@
 # Quarkus Queryable
 
+[![Maven Central](https://img.shields.io/maven-metadata/v?metadataUrl=https%3A%2F%2Frepo.maven.apache.org%2Fmaven2%2Fdev%2Fqueryable%2Fquarkus-queryable%2Fmaven-metadata.xml&label=maven%20central)](https://central.sonatype.com/artifact/dev.queryable/quarkus-queryable)
+
 Queryable is a Quarkus extension that adds annotation-driven collection filters
 to Hibernate ORM REST Data with Panache.
 
