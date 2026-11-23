@@ -56,6 +56,10 @@ public class QueryableEngine {
 
     public <T> Response list(Class<T> entityType, UriInfo uriInfo) {
         MultivaluedMap<String, String> parameters = uriInfo.getQueryParameters();
+        int startRow = integer(parameters, "startRow", 0);
+        int pageSize = integer(parameters, "pageSize", 10);
+        long total;
+        List<T> result;
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
 
         CriteriaQuery<Long> countQuery = cb.createQuery(Long.class);
@@ -65,7 +69,9 @@ public class QueryableEngine {
         if (!countPredicates.isEmpty()) {
             countQuery.where(countPredicates.toArray(Predicate[]::new));
         }
-        long total = entityManager.createQuery(countQuery).getSingleResult();
+        try (HibernateFilterScope ignored = HibernateFilterScope.open(entityManager, entityType, parameters)) {
+            total = entityManager.createQuery(countQuery).getSingleResult();
+        }
 
         CriteriaQuery<T> query = cb.createQuery(entityType);
         Root<T> root = query.from(entityType);
@@ -75,14 +81,13 @@ public class QueryableEngine {
             query.where(predicates.toArray(Predicate[]::new));
         }
         applyOrder(cb, query, root, parameters.getFirst("orderBy"), entityType);
-
-        int startRow = integer(parameters, "startRow", 0);
-        int pageSize = integer(parameters, "pageSize", 10);
-        var typedQuery = entityManager.createQuery(query);
-        if (pageSize > 0) {
-            typedQuery.setFirstResult(startRow).setMaxResults(pageSize);
+        try (HibernateFilterScope ignored = HibernateFilterScope.open(entityManager, entityType, parameters)) {
+            var typedQuery = entityManager.createQuery(query);
+            if (pageSize > 0) {
+                typedQuery.setFirstResult(startRow).setMaxResults(pageSize);
+            }
+            result = typedQuery.getResultList();
         }
-        List<T> result = typedQuery.getResultList();
         dispatchBefore(entityType, QueryableOperation.LIST, null, null);
         dispatchAfter(entityType, QueryableOperation.LIST, result);
         return Response.ok(result)

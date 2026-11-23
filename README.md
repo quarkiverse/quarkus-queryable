@@ -80,11 +80,6 @@ Custom filters go in `service.filters`:
 public class DeveloperFilter implements QueryableFilter<Developer> {
 
     @Override
-    public Class<Developer> entityType() {
-        return Developer.class;
-    }
-
-    @Override
     public void contribute(QueryableFilterContext<Developer> context) {
         // add Criteria API predicates
     }
@@ -105,6 +100,9 @@ void notify(Developer developer) {
     // external side effect, executed after commit
 }
 ```
+
+The development version also supports existing Hibernate filters with
+`@QFilter`; see [Query filters](docs/modules/ROOT/pages/filters.adoc).
 
 Security remains standard Quarkus configuration:
 

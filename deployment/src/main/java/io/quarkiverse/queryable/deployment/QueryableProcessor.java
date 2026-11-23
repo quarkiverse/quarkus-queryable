@@ -31,6 +31,7 @@ import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
+import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveMethodBuildItem;
 import io.quarkus.gizmo.ClassCreator;
 import io.quarkus.gizmo.ClassOutput;
@@ -57,6 +58,8 @@ class QueryableProcessor {
     private static final DotName Q_NOT_NIL = DotName.createSimple("io.quarkiverse.queryable.runtime.QNotNil");
     private static final DotName Q_LOGICAL_DELETE = DotName.createSimple(
             "io.quarkiverse.queryable.runtime.QLogicalDelete");
+    private static final DotName Q_FILTER = DotName.createSimple("io.quarkiverse.queryable.runtime.QFilter");
+    private static final DotName Q_FILTERS = DotName.createSimple("io.quarkiverse.queryable.runtime.QFilter$List");
     private static final List<DotName> CALLBACK_ANNOTATIONS = List.of(
             DotName.createSimple("io.quarkiverse.queryable.runtime.PreFetch"),
             DotName.createSimple("io.quarkiverse.queryable.runtime.PostFetch"),
@@ -78,6 +81,16 @@ class QueryableProcessor {
     AdditionalBeanBuildItem registerRuntime() {
         return AdditionalBeanBuildItem.unremovableOf(
                 "io.quarkiverse.queryable.runtime.QueryableEngine");
+    }
+
+    @BuildStep
+    ReflectiveClassBuildItem registerFilterAnnotations() {
+        return ReflectiveClassBuildItem.builder(
+                "io.quarkiverse.queryable.runtime.QFilter",
+                "io.quarkiverse.queryable.runtime.QFilter$List",
+                "org.hibernate.annotations.Filter",
+                "org.hibernate.annotations.Filters")
+                .methods().reason("Queryable Hibernate filter annotations").build();
     }
 
     @BuildStep
@@ -108,7 +121,8 @@ class QueryableProcessor {
             ClassInfo entity = annotation.target().asClass();
             String entityName = entity.name().toString();
             String resourceName = generatedResourceName(entityName);
-            generateResource(jaxRsOutput, resourceName, entityName, annotation, queryParameters(entity));
+            generateResource(jaxRsOutput, resourceName, entityName, annotation,
+                    queryParameters(entity, combinedIndex.getIndex()));
             String adapterName = resourceName + "RestDataAdapter";
             generateRestDataAdapter(beanOutput, adapterName, entityName);
 
@@ -233,8 +247,20 @@ class QueryableProcessor {
                 method.getThis(), method.getMethodParam(names.size() - 1)));
     }
 
-    private List<String> queryParameters(ClassInfo entity) {
+    private List<String> queryParameters(ClassInfo entity, IndexView index) {
         Set<String> result = new LinkedHashSet<>();
+        for (ClassInfo current = entity; current != null; current = index.getClassByName(current.superName())) {
+            List<AnnotationInstance> filters = current.declaredAnnotationsWithRepeatable(Q_FILTER, Q_FILTERS);
+            if (!filters.isEmpty()) {
+                for (AnnotationInstance filter : filters) {
+                    result.add(filter.value("queryParam").asString());
+                }
+                break;
+            }
+            if (current.superName() == null) {
+                break;
+            }
+        }
         for (FieldInfo field : entity.fields()) {
             addParameter(result, field, Q, "obj");
             addParameter(result, field, Q_LIKE, "like");

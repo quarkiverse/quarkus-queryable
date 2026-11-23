@@ -43,11 +43,6 @@ public class DeveloperRsListener implements QueryableRsListener<Developer> {
     @Inject
     SecurityIdentity identity;
 
-    @Override
-    public Class<Developer> entityType() {
-        return Developer.class;
-    }
-
     @PrePersist
     void beforeCreate(Developer developer) {
         developer.creationDate = LocalDateTime.now();
@@ -64,6 +59,44 @@ public class DeveloperRsListener implements QueryableRsListener<Developer> {
     }
 }
 ----
+
+The listener entity type is inferred from `QueryableRsListener<Developer>`,
+including through generic superclasses. Existing `entityType()` overrides
+remain supported.
+
+== Validation before create or update
+
+Use the Queryable `@PrePersist` and `@PreUpdate` callbacks to validate the
+incoming entity before it is saved. Throw a Jakarta REST exception to reject
+the request with the corresponding HTTP status:
+
+[source,java]
+----
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.ws.rs.BadRequestException;
+
+import io.quarkiverse.queryable.runtime.PrePersist;
+import io.quarkiverse.queryable.runtime.PreUpdate;
+import io.quarkiverse.queryable.runtime.QueryableRsListener;
+
+@ApplicationScoped
+public class CustomerRsListener implements QueryableRsListener<Customer> {
+    @PrePersist
+    @PreUpdate
+    void validate(Customer customer) {
+        if (customer.name == null || customer.name.isBlank()) {
+            throw new BadRequestException("name is required");
+        }
+    }
+}
+----
+
+An invalid `POST` or `PUT` returns HTTP 400 and the corresponding entity
+write is not performed. The REST framework controls the response body; use a
+Jakarta REST `ExceptionMapper` if your application requires a particular
+error format. Unmapped runtime exceptions are server errors, not validation
+responses. These are Queryable listener annotations, not the JPA lifecycle
+annotations with the same names.
 
 Pre-callbacks execute before persistence and can reject or mutate the entity.
 Post-callbacks for write operations are registered as JTA synchronizations and

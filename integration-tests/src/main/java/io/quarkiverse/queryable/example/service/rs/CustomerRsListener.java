@@ -5,6 +5,7 @@ import java.util.Locale;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import jakarta.ws.rs.BadRequestException;
 
 import io.quarkiverse.queryable.example.model.Customer;
 import io.quarkiverse.queryable.runtime.PostDelete;
@@ -21,7 +22,7 @@ import io.quarkiverse.queryable.runtime.QueryableRsListener;
 import io.quarkus.security.identity.SecurityIdentity;
 
 @ApplicationScoped
-public class CustomerRsListener implements QueryableRsListener<Customer> {
+public class CustomerRsListener extends CustomerListenerBase<Customer> {
 
     @Inject
     AuditSink auditSink;
@@ -29,16 +30,12 @@ public class CustomerRsListener implements QueryableRsListener<Customer> {
     @Inject
     SecurityIdentity securityIdentity;
 
-    @Override
-    public Class<Customer> entityType() {
-        return Customer.class;
-    }
-
     @PrePersist
     void normalize(Customer customer) {
         if (customer.externalCode != null) {
             customer.externalCode = customer.externalCode.trim().toUpperCase(Locale.ROOT);
         }
+
         customer.creationDate = LocalDateTime.now();
         customer.creationUser = securityIdentity.getPrincipal().getName();
     }
@@ -89,7 +86,18 @@ public class CustomerRsListener implements QueryableRsListener<Customer> {
         customer.updateUser = securityIdentity.getPrincipal().getName();
     }
 
+    @PrePersist
+    @PreUpdate
+    void validate(Customer customer) {
+        if (customer.name == null || customer.name.isBlank()) {
+            throw new BadRequestException("name is required");
+        }
+    }
+
     @PreDelete
     void preDelete(Long id) {
     }
+}
+
+abstract class CustomerListenerBase<T> implements QueryableRsListener<T> {
 }

@@ -7,12 +7,7 @@ import io.quarkiverse.queryable.runtime.QueryableFilter;
 import io.quarkiverse.queryable.runtime.QueryableFilterContext;
 
 @ApplicationScoped
-public class CustomerFilter implements QueryableFilter<Customer> {
-
-    @Override
-    public Class<Customer> entityType() {
-        return Customer.class;
-    }
+public class CustomerFilter extends CustomerFilterBase<Customer> {
 
     @Override
     public void contribute(QueryableFilterContext<Customer> context) {
@@ -21,5 +16,9 @@ public class CustomerFilter implements QueryableFilter<Customer> {
             context.add(context.criteriaBuilder().equal(
                     context.root().get("address").get("city"), city));
         }
+
     }
+}
+
+abstract class CustomerFilterBase<T> implements QueryableFilter<T> {
 }
