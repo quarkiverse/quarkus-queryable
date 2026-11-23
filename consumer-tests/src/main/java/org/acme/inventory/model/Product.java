@@ -9,16 +9,23 @@ import io.quarkiverse.queryable.runtime.QOrderBy;
 import io.quarkiverse.queryable.runtime.QRs;
 import io.quarkus.hibernate.orm.panache.PanacheEntityBase;
 import jakarta.persistence.Entity;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Temporal;
+import jakarta.persistence.TemporalType;
 import org.hibernate.annotations.UuidGenerator;
 import org.hibernate.annotations.Filter;
 import org.hibernate.annotations.FilterDef;
 import org.hibernate.annotations.ParamDef;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
 
 @Entity
+@Q
 @Table(name = "products")
 @QRs("/api/products")
 @QOrderBy("name asc")
@@ -45,4 +52,10 @@ public class Product extends PanacheEntityBase {
 
     @QLogicalDelete
     public boolean active = true;
+
+    @Temporal(TemporalType.TIMESTAMP)
+    public Date availableOn;
+
+    @ElementCollection
+    public List<String> labels = new ArrayList<>();
 }

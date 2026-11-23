@@ -42,6 +42,54 @@ produce validated Criteria API predicates at runtime.
 |Default ordering
 |===
 
+== Class-level filters and collections
+
+Apply `@Q` to an entity class to expose equality filters for its supported
+persistent scalar fields and `@ElementCollection` fields, including inherited
+fields. On a mapped superclass, it applies to that superclass's own fields.
+Static, transient, embedded and association fields are not exposed
+automatically. `@QLogicalDelete` retains its existing behavior. An explicit
+field-level `@Q` overrides the generated field name and prefix; class-level
+`@Q` attributes do not configure individual fields.
+
+[source,java]
+----
+@Entity
+@Q
+@QRs("/products")
+public class Product extends PanacheEntity {
+    public String name;
+
+    @ElementCollection
+    public List<String> tags;
+}
+----
+
+`GET /products?obj.name=Book&obj.tags=java` checks equality on `name` and
+membership of `java` in `tags`. A field-level `@Q` can also enable membership
+without a class-level annotation. Basic element types, including enums, are
+converted to the collection element type; ranges are not supported for
+collections. OR alternatives work with membership and the collection count
+does not duplicate rows.
+
+Class-level `@Q` exposes all supported persistent fields, potentially including
+identifiers and sensitive fields. Use field-level annotations instead when
+only selected fields should be searchable. Query filters are not authorization.
+
+== `java.util.Date` ranges
+
+`@Q` supports `java.util.Date` for equality and inclusive ranges. For a date
+without a time, UTC is used: `from.createdAt=2026-03-10` starts at
+`2026-03-10T00:00:00.000Z`, and `to.createdAt=2026-03-10` ends at
+`2026-03-10T23:59:59.999Z`. Equality on a date without a time uses the start
+of the UTC day.
+
+An ISO date-time with a UTC offset (such as `2026-03-10T12:30:00+02:00`) is
+compared as an exact instant; ISO local date-times and the legacy formats
+`yyyy-MM-dd HH:mm[:ss]`, `dd/MM/yyyy HH:mm[:ss]` and
+`dd/MM/yyyy, HH:mm[:ss]` are interpreted in UTC. Invalid dates return HTTP
+400. URL-encode `+` and spaces in query parameter values.
+
 == OR filters
 
 Prefix supported query parameters with `or.` to combine their predicates in

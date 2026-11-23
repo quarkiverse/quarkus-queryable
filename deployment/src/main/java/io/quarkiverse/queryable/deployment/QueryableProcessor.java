@@ -1,5 +1,6 @@
 package io.quarkiverse.queryable.deployment;
 
+import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
@@ -24,7 +25,9 @@ import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.FieldInfo;
 import org.jboss.jandex.IndexView;
+import org.jboss.jandex.Type;
 
+import io.quarkiverse.queryable.runtime.QueryableTypes;
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.GeneratedBeanBuildItem;
 import io.quarkus.arc.deployment.GeneratedBeanGizmoAdaptor;
@@ -61,6 +64,8 @@ class QueryableProcessor {
             "io.quarkiverse.queryable.runtime.QLogicalDelete");
     private static final DotName Q_FILTER = DotName.createSimple("io.quarkiverse.queryable.runtime.QFilter");
     private static final DotName Q_FILTERS = DotName.createSimple("io.quarkiverse.queryable.runtime.QFilter$List");
+    private static final DotName ELEMENT_COLLECTION = DotName.createSimple("jakarta.persistence.ElementCollection");
+    private static final DotName TRANSIENT = DotName.createSimple("jakarta.persistence.Transient");
     private static final List<DotName> CALLBACK_ANNOTATIONS = List.of(
             DotName.createSimple("io.quarkiverse.queryable.runtime.PreFetch"),
             DotName.createSimple("io.quarkiverse.queryable.runtime.PostFetch"),
@@ -251,6 +256,13 @@ class QueryableProcessor {
     private List<String> queryParameters(ClassInfo entity, IndexView index) {
         Set<String> result = new LinkedHashSet<>();
         Set<String> protectedParameters = new LinkedHashSet<>();
+        List<FieldInfo> fields = new ArrayList<>();
+        for (ClassInfo current = entity; current != null; current = index.getClassByName(current.superName())) {
+            fields.addAll(current.fields());
+            if (current.superName() == null) {
+                break;
+            }
+        }
         for (ClassInfo current = entity; current != null; current = index.getClassByName(current.superName())) {
             List<AnnotationInstance> filters = current.declaredAnnotationsWithRepeatable(Q_FILTER, Q_FILTERS);
             if (!filters.isEmpty()) {
@@ -265,7 +277,7 @@ class QueryableProcessor {
                 break;
             }
         }
-        for (FieldInfo field : entity.fields()) {
+        for (FieldInfo field : fields) {
             AnnotationInstance logicalDelete = field.annotation(Q_LOGICAL_DELETE);
             if (logicalDelete != null) {
                 protectedParameters.add(parameterName(field, logicalDelete, "obj", false));
@@ -282,21 +294,51 @@ class QueryableProcessor {
                 protectedParameters.add(parameterName(field, like, "like", false));
             }
         }
-        for (FieldInfo field : entity.fields()) {
-            addParameter(result, field, Q, "obj", protectedParameters);
+        for (FieldInfo field : fields) {
+            boolean automatic = (entity.declaredAnnotation(Q) != null || field.declaringClass().declaredAnnotation(Q) != null)
+                    && !field.hasAnnotation(Q)
+                    && automaticField(field, index);
+            if (automatic) {
+                addQueryParameter(result, "obj." + field.name(), protectedParameters);
+            } else {
+                addParameter(result, field, Q, "obj", protectedParameters);
+            }
             addParameter(result, field, Q_LIKE, "like", protectedParameters);
             addParameter(result, field, Q_LIST, "obj", protectedParameters);
             addParameter(result, field, Q_LIKE_LIST, "like", protectedParameters);
             addParameter(result, field, Q_NIL, "nil", protectedParameters);
             addParameter(result, field, Q_NOT_NIL, "notNil", protectedParameters);
             addParameter(result, field, Q_LOGICAL_DELETE, "obj", protectedParameters);
-            if (field.hasAnnotation(Q) && !executeAlways(field.annotation(Q))) {
-                String name = fieldName(field, field.annotation(Q));
+            if (!field.hasAnnotation(ELEMENT_COLLECTION)
+                    && (automatic || field.hasAnnotation(Q) && !executeAlways(field.annotation(Q)))) {
+                String name = automatic ? field.name() : fieldName(field, field.annotation(Q));
                 addQueryParameter(result, "from." + name, protectedParameters);
                 addQueryParameter(result, "to." + name, protectedParameters);
             }
         }
         return List.copyOf(result);
+    }
+
+    private boolean automaticField(FieldInfo field, IndexView index) {
+        if (Modifier.isStatic(field.flags()) || Modifier.isTransient(field.flags())
+                || field.hasAnnotation(TRANSIENT) || field.hasAnnotation(Q_LOGICAL_DELETE)) {
+            return false;
+        }
+        Type type = field.type();
+        if (field.hasAnnotation(ELEMENT_COLLECTION)) {
+            if (type.kind() != Type.Kind.PARAMETERIZED_TYPE
+                    || !Set.of("java.util.Collection", "java.util.List", "java.util.Set").contains(type.name().toString())
+                    || type.asParameterizedType().arguments().size() != 1) {
+                return false;
+            }
+            type = type.asParameterizedType().arguments().get(0);
+        }
+        if (type.kind() != Type.Kind.CLASS && type.kind() != Type.Kind.PRIMITIVE) {
+            return false;
+        }
+        ClassInfo typeInfo = index.getClassByName(type.name());
+        boolean enumType = typeInfo != null && (typeInfo.flags() & 0x4000) != 0;
+        return QueryableTypes.isScalar(type.name().toString(), enumType);
     }
 
     private void addParameter(Set<String> result, FieldInfo field, DotName annotationName,

@@ -16,7 +16,8 @@ class ProductResourceTest {
         given()
                 .contentType(ContentType.JSON)
                 .body("""
-                        {"name":"Quarkus mug","price":19.90,"active":true,"visibility":"PUBLIC"}
+                        {"name":"Quarkus mug","price":19.90,"active":true,"visibility":"PUBLIC",
+                         "availableOn":"2026-03-10T23:59:59Z","labels":["mug","gift"]}
                         """)
                 .post("/api/products")
                 .then()
@@ -50,6 +51,14 @@ class ProductResourceTest {
 
         given().queryParam("or.like.name", "missing", "mug")
                 .queryParam("or.obj.price", "0")
+                .get("/api/products")
+                .then().statusCode(200)
+                .body("$", hasSize(1))
+                .header("listSize", "1");
+
+        given().queryParam("obj.labels", "gift")
+                .queryParam("from.availableOn", "2026-03-10")
+                .queryParam("to.availableOn", "2026-03-10")
                 .get("/api/products")
                 .then().statusCode(200)
                 .body("$", hasSize(1))

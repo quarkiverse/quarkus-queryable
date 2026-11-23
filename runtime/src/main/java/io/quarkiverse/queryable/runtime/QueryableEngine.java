@@ -4,14 +4,23 @@ import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.time.DateTimeException;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.time.format.ResolverStyle;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -22,11 +31,16 @@ import java.util.function.Consumer;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.Transient;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
+import jakarta.persistence.metamodel.Attribute;
+import jakarta.persistence.metamodel.PluralAttribute;
 import jakarta.transaction.Status;
 import jakarta.transaction.Synchronization;
 import jakarta.transaction.TransactionSynchronizationRegistry;
@@ -46,6 +60,14 @@ import io.quarkiverse.queryable.runtime.spi.QueryableRsListenerMarker;
 public class QueryableEngine {
 
     private static final Logger LOG = Logger.getLogger(QueryableEngine.class);
+    private static final List<DateTimeFormatter> LEGACY_DATE_FORMATS = List.of(
+            DateTimeFormatter.ISO_LOCAL_DATE_TIME,
+            DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm", Locale.ROOT).withResolverStyle(ResolverStyle.STRICT),
+            DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm:ss", Locale.ROOT).withResolverStyle(ResolverStyle.STRICT),
+            DateTimeFormatter.ofPattern("dd/MM/uuuu HH:mm", Locale.ROOT).withResolverStyle(ResolverStyle.STRICT),
+            DateTimeFormatter.ofPattern("dd/MM/uuuu HH:mm:ss", Locale.ROOT).withResolverStyle(ResolverStyle.STRICT),
+            DateTimeFormatter.ofPattern("dd/MM/uuuu, HH:mm", Locale.ROOT).withResolverStyle(ResolverStyle.STRICT),
+            DateTimeFormatter.ofPattern("dd/MM/uuuu, HH:mm:ss", Locale.ROOT).withResolverStyle(ResolverStyle.STRICT));
 
     @Inject
     EntityManager entityManager;
@@ -198,21 +220,30 @@ public class QueryableEngine {
         }
         for (Field field : fields(entityType)) {
             Q equal = field.getAnnotation(Q.class);
-            if (equal != null) {
-                String name = equal.name().isBlank() ? field.getName() : equal.name();
-                String equality = equal.prefix() + "." + name;
-                if (fixedCondition(field, equal.options(), equal.condition(), "@Q")) {
+            boolean automatic = equal == null
+                    && (entityType.isAnnotationPresent(Q.class) || field.getDeclaringClass().isAnnotationPresent(Q.class))
+                    && automaticField(field, root);
+            if (equal != null || automatic) {
+                String name = equal == null || equal.name().isBlank() ? field.getName() : equal.name();
+                String prefix = equal == null ? "obj" : equal.prefix();
+                String equality = prefix + "." + name;
+                boolean collection = field.isAnnotationPresent(ElementCollection.class);
+                if (equal != null && fixedCondition(field, equal.options(), equal.condition(), "@Q")) {
+                    if (collection) {
+                        throw new IllegalStateException("EXECUTE_ALWAYS is not supported on collection field " + field);
+                    }
                     rejectOr(parameters, equality, "EXECUTE_ALWAYS cannot be used in OR");
                     rejectOr(parameters, "from." + name, "EXECUTE_ALWAYS cannot be used in OR");
                     rejectOr(parameters, "to." + name, "EXECUTE_ALWAYS cannot be used in OR");
                     predicates.add(cb.equal(path(root, field.getName()), fixedValue(field, equal.condition())));
                 } else {
-                    addEqualOrRange(field, equal.prefix(), equal.name(), cb, root, parameters, predicates);
-                    for (String nameToMatch : List.of(equality, "from." + name, "to." + name)) {
+                    addEqualOrRange(field, prefix, name, cb, root, parameters, predicates);
+                    List<String> names = collection ? List.of(equality) : List.of(equality, "from." + name, "to." + name);
+                    for (String nameToMatch : names) {
                         addOrValues(nameToMatch, parameters, handledOrParameters, alternatives,
                                 single -> {
                                     validateOrValue(field, single.getFirst(nameToMatch), false);
-                                    addEqualOrRange(field, equal.prefix(), equal.name(), cb, root, single, alternatives);
+                                    addEqualOrRange(field, prefix, name, cb, root, single, alternatives);
                                 });
                     }
                 }
@@ -286,6 +317,29 @@ public class QueryableEngine {
             throw new BadRequestException("No predicate was produced for OR query parameters");
         }
         return predicates;
+    }
+
+    private static boolean automaticField(Field field, Root<?> root) {
+        int modifiers = field.getModifiers();
+        if (Modifier.isStatic(modifiers) || Modifier.isTransient(modifiers) || field.isSynthetic()
+                || field.isAnnotationPresent(Transient.class) || field.isAnnotationPresent(QLogicalDelete.class)) {
+            return false;
+        }
+        Attribute<?, ?> attribute = root.getModel().getAttributes().stream()
+                .filter(item -> item.getName().equals(field.getName()))
+                .findFirst().orElse(null);
+        if (attribute == null) {
+            return false;
+        }
+        if (field.isAnnotationPresent(ElementCollection.class)
+                && Set.of(Collection.class, List.class, Set.class).contains(field.getType())
+                && attribute instanceof PluralAttribute<?, ?, ?> plural) {
+            Class<?> type = plural.getElementType().getJavaType();
+            return QueryableTypes.isScalar(type.getName(), type.isEnum());
+        }
+        Class<?> type = field.getType();
+        return !attribute.isAssociation() && !attribute.isCollection()
+                && QueryableTypes.isScalar(type.getName(), type.isEnum());
     }
 
     private static void rejectOr(MultivaluedMap<String, String> parameters, String name, String reason) {
@@ -397,8 +451,33 @@ public class QueryableEngine {
         String fromValue = parameters.getFirst("from." + name);
         String toValue = parameters.getFirst("to." + name);
 
+        if (field.isAnnotationPresent(ElementCollection.class)) {
+            Attribute<?, ?> attribute = root.getModel().getAttribute(fieldName);
+            if (!Collection.class.isAssignableFrom(type) || !(attribute instanceof PluralAttribute<?, ?, ?> plural)) {
+                throw new IllegalStateException("@Q requires a plural element collection: " + field);
+            }
+            if (fromValue != null || toValue != null) {
+                throw new BadRequestException("Ranges are not supported for collection " + name);
+            }
+            if (equalValue != null) {
+                Class<?> elementType = plural.getElementType().getJavaType();
+                Object value;
+                try {
+                    if ((elementType == Boolean.class || elementType == boolean.class)
+                            && !equalValue.equalsIgnoreCase("true") && !equalValue.equalsIgnoreCase("false")) {
+                        throw new IllegalArgumentException("Expected true or false");
+                    }
+                    value = convertQueryValue(elementType, equalValue, false);
+                } catch (IllegalArgumentException | DateTimeException exception) {
+                    throw new BadRequestException("Invalid value for " + prefix + "." + name, exception);
+                }
+                Expression<Collection<Object>> collection = root.get(fieldName);
+                predicates.add(cb.isMember(value, collection));
+            }
+            return;
+        }
         if (equalValue != null) {
-            predicates.add(cb.equal(path(root, fieldName), convert(type, equalValue)));
+            predicates.add(cb.equal(path(root, fieldName), convertQueryValue(type, equalValue, false)));
         }
         if (fromValue != null) {
             if (!Comparable.class.isAssignableFrom(type)
@@ -409,10 +488,11 @@ public class QueryableEngine {
                     && !type.equals(ZonedDateTime.class)) {
                 throw new IllegalArgumentException("from." + name + " requires a comparable field");
             }
-            predicates.add(cb.greaterThanOrEqualTo(path(root, fieldName), (Comparable) convert(type, fromValue)));
+            predicates.add(
+                    cb.greaterThanOrEqualTo(path(root, fieldName), (Comparable) convertQueryValue(type, fromValue, false)));
         }
         if (toValue != null) {
-            predicates.add(cb.lessThanOrEqualTo(path(root, fieldName), (Comparable) convert(type, toValue)));
+            predicates.add(cb.lessThanOrEqualTo(path(root, fieldName), (Comparable) convertQueryValue(type, toValue, true)));
         }
     }
 
@@ -563,6 +643,8 @@ public class QueryableEngine {
             return new BigDecimal(value);
         if (type == BigInteger.class)
             return new BigInteger(value);
+        if (type == Date.class)
+            return date(value, false);
         if (type == LocalDate.class)
             return LocalDate.parse(value);
         if (type == LocalDateTime.class)
@@ -574,6 +656,40 @@ public class QueryableEngine {
         if (type.isEnum())
             return Enum.valueOf((Class<? extends Enum>) type, value);
         throw new IllegalArgumentException("Unsupported query parameter type: " + type.getName());
+    }
+
+    private static Object convertQueryValue(Class<?> type, String value, boolean endOfDay) {
+        if (type != Date.class) {
+            return convert(type, value);
+        }
+        try {
+            return date(value, endOfDay);
+        } catch (DateTimeException exception) {
+            throw new BadRequestException("Invalid date: " + value, exception);
+        }
+    }
+
+    private static Date date(String value, boolean endOfDay) {
+        try {
+            return Date.from(OffsetDateTime.parse(value).toInstant());
+        } catch (DateTimeParseException ignored) {
+            // Try local formats using UTC.
+        }
+        try {
+            LocalDate day = LocalDate.parse(value);
+            Instant start = day.atStartOfDay().toInstant(ZoneOffset.UTC);
+            return Date.from(endOfDay ? day.plusDays(1).atStartOfDay().toInstant(ZoneOffset.UTC).minusMillis(1) : start);
+        } catch (DateTimeParseException ignored) {
+            // Try date-time formats.
+        }
+        for (DateTimeFormatter formatter : LEGACY_DATE_FORMATS) {
+            try {
+                return Date.from(LocalDateTime.parse(value, formatter).toInstant(ZoneOffset.UTC));
+            } catch (DateTimeParseException ignored) {
+                // Try the next supported format.
+            }
+        }
+        throw new DateTimeParseException("Unsupported date format", value, 0);
     }
 
     private static int integer(MultivaluedMap<String, String> parameters, String name, int defaultValue) {

@@ -177,6 +177,92 @@ class QueryableResourceTest {
     }
 
     @Test
+    void supportsClassLevelFiltersCollectionMembershipAndDateRanges() {
+        int first = createClassFilterSample("early", "first", "2026-03-10T00:00:00Z", true);
+        int last = createClassFilterSample("late", "last", "2026-03-10T23:59:59.999Z", true);
+        int next = createClassFilterSample("next", "other", "2026-03-11T00:00:00Z", true);
+        int inactive = createClassFilterSample("hidden", "hidden", "2026-03-10T12:00:00Z", false);
+        try {
+            given().queryParam("from.createdAt", "2026-03-10")
+                    .queryParam("to.createdAt", "2026-03-10")
+                    .get("/api/class-filters").then().statusCode(200)
+                    .body("$", hasSize(2)).header("listSize", "2");
+            given().queryParam("from.createdAt", "2026-03-10T23:59:59.999Z")
+                    .queryParam("to.createdAt", "2026-03-11T01:00:00+01:00")
+                    .get("/api/class-filters").then().statusCode(200)
+                    .body("$", hasSize(2));
+            given().queryParam("obj.createdAt", "10/03/2026 00:00")
+                    .get("/api/class-filters").then().statusCode(200)
+                    .body("$", hasSize(1)).body("[0].name", equalTo("early"));
+            given().queryParam("or.from.createdAt", "2026-03-11")
+                    .queryParam("or.obj.name", "early")
+                    .get("/api/class-filters").then().statusCode(200)
+                    .body("$", hasSize(2));
+            given().queryParam("from.createdAt", "2026-02-30")
+                    .get("/api/class-filters").then().statusCode(400);
+            given().queryParam("or.to.createdAt", "bad-date")
+                    .get("/api/class-filters").then().statusCode(400);
+
+            given().queryParam("obj.name", "early")
+                    .queryParam("exact.label", "first")
+                    .queryParam("obj.tags", "java")
+                    .queryParam("obj.ratings", "7")
+                    .get("/api/class-filters").then().statusCode(200)
+                    .body("$", hasSize(1)).body("[0].name", equalTo("early"))
+                    .header("listSize", "1");
+            given().queryParam("obj.id", first)
+                    .get("/api/class-filters").then().statusCode(200)
+                    .body("$", hasSize(1)).body("[0].name", equalTo("early"));
+            given().queryParam("or.obj.tags", "missing", "java")
+                    .queryParam("or.obj.name", "next")
+                    .queryParam("pageSize", "1")
+                    .get("/api/class-filters").then().statusCode(200)
+                    .body("$", hasSize(1)).header("listSize", "3");
+            given().queryParam("or.obj.active", "false")
+                    .get("/api/class-filters").then().statusCode(400);
+            given().queryParam("or.obj.ignored", "value")
+                    .get("/api/class-filters").then().statusCode(400);
+            given().queryParam("or.obj.title", "first")
+                    .get("/api/class-filters").then().statusCode(400);
+            given().queryParam("from.tags", "java")
+                    .get("/api/class-filters").then().statusCode(400);
+            given().queryParam("obj.ratings", "invalid")
+                    .get("/api/class-filters").then().statusCode(400);
+        } finally {
+            for (int id : new int[] { first, last, next, inactive }) {
+                given().delete("/api/class-filters/" + id).then().statusCode(204);
+            }
+        }
+    }
+
+    private int createClassFilterSample(String name, String title, String date, boolean active) {
+        return given().contentType(ContentType.JSON)
+                .body("""
+                        {"name":"%s","title":"%s","createdAt":"%s",
+                         "tags":["java","quarkus"],"ratings":[7,9],"active":%s}
+                        """.formatted(name, title, date, active))
+                .post("/api/class-filters").then().statusCode(201).extract().path("id");
+    }
+
+    @Test
+    void appliesClassLevelFiltersOnMappedSuperclasses() {
+        int id = given().contentType(ContentType.JSON)
+                .body("""
+                        {"inheritedValue":"base","childValue":"child"}
+                        """)
+                .post("/api/inherited-filters").then().statusCode(201).extract().path("id");
+        try {
+            given().queryParam("obj.inheritedValue", "base")
+                    .get("/api/inherited-filters").then().statusCode(200)
+                    .body("$", hasSize(1)).header("listSize", "1");
+            given().queryParam("or.obj.childValue", "child")
+                    .get("/api/inherited-filters").then().statusCode(400);
+        } finally {
+            given().delete("/api/inherited-filters/" + id).then().statusCode(204);
+        }
+    }
+
+    @Test
     void supportsCustomContributorOrderingAndPagination() {
         authenticated()
                 .queryParam("address.city", "Milano")
@@ -395,6 +481,16 @@ class QueryableResourceTest {
         assertThat(document.getList("paths['/api/options'].get.parameters.name"), not(hasItem("like.name")));
         assertThat(document.getList("paths['/api/options'].get.parameters.name"), not(hasItem("from.rating")));
         assertThat(document.getList("paths['/api/options'].get.parameters.name"), not(hasItem("or.obj.country")));
+        assertThat(document.getList("paths['/api/class-filters'].get.parameters.name"), hasItem("obj.name"));
+        assertThat(document.getList("paths['/api/class-filters'].get.parameters.name"), hasItem("obj.id"));
+        assertThat(document.getList("paths['/api/class-filters'].get.parameters.name"), hasItem("exact.label"));
+        assertThat(document.getList("paths['/api/class-filters'].get.parameters.name"), hasItem("from.createdAt"));
+        assertThat(document.getList("paths['/api/class-filters'].get.parameters.name"), hasItem("or.obj.tags"));
+        assertThat(document.getList("paths['/api/class-filters'].get.parameters.name"), not(hasItem("from.tags")));
+        assertThat(document.getList("paths['/api/class-filters'].get.parameters.name"), not(hasItem("obj.ignored")));
+        assertThat(document.getList("paths['/api/class-filters'].get.parameters.name"), not(hasItem("or.obj.active")));
+        assertThat(document.getList("paths['/api/inherited-filters'].get.parameters.name"), hasItem("obj.inheritedValue"));
+        assertThat(document.getList("paths['/api/inherited-filters'].get.parameters.name"), not(hasItem("obj.childValue")));
         assertThat(document.getMap("paths['/api/v1/customers'].post"), notNullValue());
         assertThat(document.getMap("paths['/api/v1/customers/{id}'].put"), notNullValue());
         assertThat(document.getMap("paths['/api/v1/customers/count'].get"), notNullValue());
