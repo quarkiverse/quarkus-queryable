@@ -140,9 +140,13 @@ mvn -f consumer-tests/pom.xml test
 ## Release
 
 Pushing a stable version tag matching the version in `pom.xml` triggers the
-Maven Central release workflow. Configure these repository Actions secrets
-before publishing: `NEXUS_USERNAME`, `NEXUS_PASSWORD`, `GPG_PRIVATE_KEY`, and
-`GPG_PASSPHRASE`.
+Maven Central release workflow. It uploads the signed artifacts and returns
+without waiting for publication. A separate workflow verifies that the parent,
+runtime, and deployment artifacts are available on Maven Central before
+creating the GitHub release; it can also be run manually with a version.
+If verification fails, check the deployment in the Central Portal.
+Configure these repository Actions secrets before publishing: `NEXUS_USERNAME`,
+`NEXUS_PASSWORD`, `GPG_PRIVATE_KEY`, and `GPG_PASSPHRASE`.
 
 ## Quarkus extension compliance
 
