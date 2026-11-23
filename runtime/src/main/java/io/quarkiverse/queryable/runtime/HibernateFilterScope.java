@@ -2,9 +2,11 @@ package io.quarkiverse.queryable.runtime;
 
 import java.time.DateTimeException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import jakarta.persistence.EntityManager;
 import jakarta.ws.rs.BadRequestException;
@@ -36,9 +38,10 @@ final class HibernateFilterScope implements AutoCloseable {
         Map<String, Map<String, Object>> values = new LinkedHashMap<>();
         Map<String, FilterDefinition> definitions = new LinkedHashMap<>();
         Map<String, String> configuredParameters = new LinkedHashMap<>();
+        Set<String> parameterlessFilters = new HashSet<>();
         for (QFilter mapping : mappings) {
-            if (mapping.name().isBlank() || mapping.queryParam().isBlank() || mapping.filterParam().isBlank()) {
-                throw new IllegalStateException("@QFilter names must not be blank on " + entityType.getName());
+            if (mapping.name().isBlank() || mapping.queryParam().isBlank()) {
+                throw new IllegalStateException("@QFilter name and queryParam must not be blank on " + entityType.getName());
             }
             if (!hasFilter(entityType, mapping.name())) {
                 throw new IllegalStateException("No Hibernate @Filter named " + mapping.name()
@@ -47,6 +50,40 @@ final class HibernateFilterScope implements AutoCloseable {
             FilterDefinition definition = factory.getFilterDefinition(mapping.name());
             if (definition == null) {
                 throw new IllegalStateException("No Hibernate @FilterDef named " + mapping.name());
+            }
+            boolean withoutParameters = false;
+            for (QOption option : mapping.options()) {
+                if (option != QOption.WITHOUT_PARAMETERS) {
+                    throw new IllegalStateException("@QFilter " + mapping.name() + " does not support " + option);
+                }
+                withoutParameters = true;
+            }
+            if (withoutParameters) {
+                if (!mapping.filterParam().isBlank()) {
+                    throw new IllegalStateException("@QFilter " + mapping.name()
+                            + " must not specify filterParam with WITHOUT_PARAMETERS");
+                }
+                if (definitions.containsKey(mapping.name())) {
+                    throw new IllegalStateException("Multiple mappings for parameterless Hibernate filter " + mapping.name());
+                }
+                for (String required : definition.getParameterNames()) {
+                    if (definition.getParameterResolver(required) == null) {
+                        throw new IllegalStateException("Hibernate filter " + mapping.name()
+                                + " requires parameter " + required + " and cannot use WITHOUT_PARAMETERS");
+                    }
+                }
+                parameterlessFilters.add(mapping.name());
+                definitions.put(mapping.name(), definition);
+                if (parameters.containsKey(mapping.queryParam())) {
+                    values.put(mapping.name(), new LinkedHashMap<>());
+                }
+                continue;
+            }
+            if (parameterlessFilters.contains(mapping.name())) {
+                throw new IllegalStateException("Multiple mappings for parameterless Hibernate filter " + mapping.name());
+            }
+            if (mapping.filterParam().isBlank()) {
+                throw new IllegalStateException("@QFilter " + mapping.name() + " requires filterParam");
             }
             JdbcMapping jdbcMapping = definition.getParameterJdbcMapping(mapping.filterParam());
             if (jdbcMapping == null) {

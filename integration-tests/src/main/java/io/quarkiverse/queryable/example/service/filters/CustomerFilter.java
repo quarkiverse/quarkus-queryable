@@ -16,7 +16,10 @@ public class CustomerFilter extends CustomerFilterBase<Customer> {
             context.add(context.criteriaBuilder().equal(
                     context.root().get("address").get("city"), city));
         }
-
+        for (String alternative : context.orParams("address.city")) {
+            context.addOr(context.criteriaBuilder().equal(
+                    context.root().get("address").get("city"), alternative));
+        }
     }
 }
 

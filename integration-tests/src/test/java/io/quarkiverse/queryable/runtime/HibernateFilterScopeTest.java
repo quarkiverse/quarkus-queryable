@@ -18,6 +18,9 @@ import org.hibernate.Session;
 import org.junit.jupiter.api.Test;
 
 import io.quarkiverse.queryable.example.model.Customer;
+import io.quarkiverse.queryable.example.model.InvalidFilterSample;
+import io.quarkiverse.queryable.example.model.InvalidOptionSamples;
+import io.quarkiverse.queryable.example.model.OptionSample;
 import io.quarkus.test.junit.QuarkusTest;
 
 @QuarkusTest
@@ -61,6 +64,56 @@ class HibernateFilterScopeTest {
         } finally {
             session.disableFilter("Customer.coordinator");
         }
+    }
+
+    @Test
+    @Transactional
+    void restoresParameterlessFilterAndPreservesExistingSessionState() {
+        Session session = entityManager.unwrap(Session.class);
+        MultivaluedMap<String, String> parameters = new MultivaluedHashMap<>();
+        parameters.add("only.current", "");
+        assertEquals("1", engine.list(OptionSample.class, uriInfo(parameters)).getHeaderString("listSize"));
+        assertNull(session.getEnabledFilter("OptionSample.current"));
+        assertEquals(7L, entityManager.createQuery("select count(o) from OptionSample o", Long.class).getSingleResult());
+
+        session.enableFilter("OptionSample.current");
+        try {
+            assertThrows(IllegalStateException.class, () -> engine.list(OptionSample.class, uriInfo(parameters)));
+            assertEquals(6L, entityManager.createQuery("select count(o) from OptionSample o", Long.class).getSingleResult());
+        } finally {
+            session.disableFilter("OptionSample.current");
+        }
+    }
+
+    @Test
+    @Transactional
+    void rejectsParameterlessMappingForFilterThatNeedsValues() {
+        IllegalStateException error = assertThrows(IllegalStateException.class,
+                () -> engine.list(InvalidFilterSample.class, uriInfo(new MultivaluedHashMap<>())));
+        org.junit.jupiter.api.Assertions.assertTrue(error.getMessage().contains("cannot use WITHOUT_PARAMETERS"));
+    }
+
+    @Test
+    @Transactional
+    void cleansUpParameterlessFiltersAfterQueryFailure() {
+        MultivaluedMap<String, String> parameters = new MultivaluedHashMap<>();
+        parameters.add("only.current", "");
+        parameters.add("only.invalid", "");
+        assertThrows(RuntimeException.class, () -> engine.list(OptionSample.class, uriInfo(parameters)));
+        Session session = entityManager.unwrap(Session.class);
+        assertNull(session.getEnabledFilter("OptionSample.current"));
+        assertNull(session.getEnabledFilter("OptionSample.invalid"));
+    }
+
+    @Test
+    @Transactional
+    void rejectsMissingOrInvalidFixedConditions() {
+        IllegalStateException missing = assertThrows(IllegalStateException.class,
+                () -> engine.list(InvalidOptionSamples.MissingCondition.class, uriInfo(new MultivaluedHashMap<>())));
+        org.junit.jupiter.api.Assertions.assertTrue(missing.getMessage().contains("requires a non-empty condition"));
+        IllegalStateException invalid = assertThrows(IllegalStateException.class,
+                () -> engine.list(InvalidOptionSamples.InvalidBoolean.class, uriInfo(new MultivaluedHashMap<>())));
+        org.junit.jupiter.api.Assertions.assertTrue(invalid.getMessage().contains("Invalid fixed condition"));
     }
 
     private static UriInfo uriInfo(MultivaluedMap<String, String> parameters) {

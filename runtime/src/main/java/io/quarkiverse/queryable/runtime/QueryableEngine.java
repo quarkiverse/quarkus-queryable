@@ -12,9 +12,12 @@ import java.time.LocalDateTime;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
@@ -28,6 +31,8 @@ import jakarta.transaction.Status;
 import jakarta.transaction.Synchronization;
 import jakarta.transaction.TransactionSynchronizationRegistry;
 import jakarta.transaction.Transactional;
+import jakarta.ws.rs.BadRequestException;
+import jakarta.ws.rs.core.MultivaluedHashMap;
 import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriInfo;
@@ -186,48 +191,187 @@ public class QueryableEngine {
     private <T> List<Predicate> predicates(Class<T> entityType, CriteriaBuilder cb, Root<T> root,
             MultivaluedMap<String, String> parameters) {
         List<Predicate> predicates = new ArrayList<>();
+        List<Predicate> alternatives = new ArrayList<>();
+        Set<String> handledOrParameters = new HashSet<>();
+        for (QFilter filter : entityType.getAnnotationsByType(QFilter.class)) {
+            rejectOr(parameters, filter.queryParam(), "Hibernate filters cannot be used in OR");
+        }
         for (Field field : fields(entityType)) {
             Q equal = field.getAnnotation(Q.class);
             if (equal != null) {
-                addEqualOrRange(field, equal.prefix(), equal.name(), cb, root, parameters, predicates);
+                String name = equal.name().isBlank() ? field.getName() : equal.name();
+                String equality = equal.prefix() + "." + name;
+                if (fixedCondition(field, equal.options(), equal.condition(), "@Q")) {
+                    rejectOr(parameters, equality, "EXECUTE_ALWAYS cannot be used in OR");
+                    rejectOr(parameters, "from." + name, "EXECUTE_ALWAYS cannot be used in OR");
+                    rejectOr(parameters, "to." + name, "EXECUTE_ALWAYS cannot be used in OR");
+                    predicates.add(cb.equal(path(root, field.getName()), fixedValue(field, equal.condition())));
+                } else {
+                    addEqualOrRange(field, equal.prefix(), equal.name(), cb, root, parameters, predicates);
+                    for (String nameToMatch : List.of(equality, "from." + name, "to." + name)) {
+                        addOrValues(nameToMatch, parameters, handledOrParameters, alternatives,
+                                single -> {
+                                    validateOrValue(field, single.getFirst(nameToMatch), false);
+                                    addEqualOrRange(field, equal.prefix(), equal.name(), cb, root, single, alternatives);
+                                });
+                    }
+                }
             }
             QLike like = field.getAnnotation(QLike.class);
             if (like != null) {
-                addLike(field, parameterName(like.prefix(), like.name(), field), cb, root, parameters, predicates);
+                String name = parameterName(like.prefix(), like.name(), field);
+                if (fixedCondition(field, like.options(), like.condition(), "@QLike")) {
+                    rejectOr(parameters, name, "EXECUTE_ALWAYS cannot be used in OR");
+                    addLikeValue(field, like.condition(), cb, root, predicates);
+                } else {
+                    addLike(field, name, cb, root, parameters, predicates);
+                    addOrValues(name, parameters, handledOrParameters, alternatives,
+                            single -> addLike(field, name, cb, root, single, alternatives));
+                }
             }
             QList list = field.getAnnotation(QList.class);
             if (list != null) {
-                addList(field, parameterName(list.prefix(), list.name(), field), cb, root, parameters, predicates);
+                String name = parameterName(list.prefix(), list.name(), field);
+                addList(field, name, cb, root, parameters, predicates);
+                addOrValues(name, parameters, handledOrParameters, alternatives,
+                        single -> {
+                            validateOrValue(field, single.getFirst(name), true);
+                            addList(field, name, cb, root, single, alternatives);
+                        });
             }
             QLikeList likeList = field.getAnnotation(QLikeList.class);
             if (likeList != null) {
-                addLikeList(field, parameterName(likeList.prefix(), likeList.name(), field),
-                        cb, root, parameters, predicates);
+                String name = parameterName(likeList.prefix(), likeList.name(), field);
+                addLikeList(field, name, cb, root, parameters, predicates);
+                addOrValues(name, parameters, handledOrParameters, alternatives,
+                        single -> addLikeList(field, name, cb, root, single, alternatives));
             }
             QNil nil = field.getAnnotation(QNil.class);
-            if (nil != null && parameters.containsKey(parameterName(nil.prefix(), nil.name(), field))) {
-                predicates.add(cb.isNotNull(path(root, field.getName())));
+            if (nil != null) {
+                String name = parameterName(nil.prefix(), nil.name(), field);
+                if (parameters.containsKey(name)) {
+                    predicates.add(cb.isNotNull(path(root, field.getName())));
+                }
+                addOrValues(name, parameters, handledOrParameters, alternatives,
+                        single -> alternatives.add(cb.isNotNull(path(root, field.getName()))));
             }
             QNotNil notNil = field.getAnnotation(QNotNil.class);
-            if (notNil != null && parameters.containsKey(parameterName(notNil.prefix(), notNil.name(), field))) {
-                predicates.add(cb.isNull(path(root, field.getName())));
+            if (notNil != null) {
+                String name = parameterName(notNil.prefix(), notNil.name(), field);
+                if (parameters.containsKey(name)) {
+                    predicates.add(cb.isNull(path(root, field.getName())));
+                }
+                addOrValues(name, parameters, handledOrParameters, alternatives,
+                        single -> alternatives.add(cb.isNull(path(root, field.getName()))));
             }
             QLogicalDelete logicalDelete = field.getAnnotation(QLogicalDelete.class);
             if (logicalDelete != null) {
                 String name = parameterName(logicalDelete.prefix(), logicalDelete.name(), field);
+                rejectOr(parameters, name, "Logical-delete filters cannot be used in OR");
                 String value = parameters.getFirst(name);
                 predicates.add(cb.equal(path(root, field.getName()), value == null || value.isBlank()
                         ? Boolean.TRUE
                         : convert(Boolean.class, value)));
             }
         }
-        applyFilters(entityType, cb, root, parameters, predicates);
+        applyFilters(entityType, cb, root, parameters, predicates, alternatives, handledOrParameters);
+        for (String name : parameters.keySet()) {
+            if (name.startsWith("or.") && !handledOrParameters.contains(name)) {
+                throw new BadRequestException("Unsupported OR query parameter: " + name);
+            }
+        }
+        if (!alternatives.isEmpty()) {
+            predicates.add(cb.or(alternatives.toArray(Predicate[]::new)));
+        } else if (parameters.keySet().stream().anyMatch(name -> name.startsWith("or."))) {
+            throw new BadRequestException("No predicate was produced for OR query parameters");
+        }
         return predicates;
+    }
+
+    private static void rejectOr(MultivaluedMap<String, String> parameters, String name, String reason) {
+        if (parameters.containsKey("or." + name)) {
+            throw new BadRequestException(reason + ": or." + name);
+        }
+    }
+
+    private static void addOrValues(String name, MultivaluedMap<String, String> parameters, Set<String> handled,
+            List<Predicate> alternatives, Consumer<MultivaluedMap<String, String>> add) {
+        String orName = "or." + name;
+        if (!parameters.containsKey(orName)) {
+            return;
+        }
+        List<String> values = parameters.get(orName);
+        if (values == null || values.isEmpty()) {
+            throw new BadRequestException("Missing value for " + orName);
+        }
+        for (String value : values) {
+            if (value == null) {
+                throw new BadRequestException("Missing value for " + orName);
+            }
+            MultivaluedMap<String, String> single = new MultivaluedHashMap<>();
+            single.add(name, value);
+            int previous = alternatives.size();
+            try {
+                add.accept(single);
+            } catch (IllegalArgumentException | java.time.DateTimeException exception) {
+                throw new BadRequestException("Invalid value for " + orName, exception);
+            }
+            if (alternatives.size() == previous) {
+                throw new BadRequestException("Invalid value for " + orName);
+            }
+        }
+        handled.add(orName);
+    }
+
+    private static void validateOrValue(Field field, String value, boolean list) {
+        List<String> values = list ? Arrays.stream(value.split(","))
+                .map(String::trim).filter(item -> !item.isEmpty()).toList() : List.of(value);
+        if (values.isEmpty()) {
+            throw new IllegalArgumentException("Expected a non-empty list");
+        }
+        if (field.getType() == boolean.class || field.getType() == Boolean.class) {
+            for (String item : values) {
+                if (!item.equalsIgnoreCase("true") && !item.equalsIgnoreCase("false")) {
+                    throw new IllegalArgumentException("Expected true or false");
+                }
+            }
+        }
+    }
+
+    private static boolean fixedCondition(Field field, QOption[] options, String condition, String annotation) {
+        boolean always = false;
+        for (QOption option : options) {
+            if (option != QOption.EXECUTE_ALWAYS) {
+                throw new IllegalStateException(annotation + " on " + field + " does not support " + option);
+            }
+            always = true;
+        }
+        if (always && condition.isEmpty()) {
+            throw new IllegalStateException(
+                    annotation + " on " + field + " requires a non-empty condition with EXECUTE_ALWAYS");
+        }
+        if (!always && !condition.isEmpty()) {
+            throw new IllegalStateException(annotation + " on " + field + " requires EXECUTE_ALWAYS when condition is set");
+        }
+        return always;
+    }
+
+    private static Object fixedValue(Field field, String condition) {
+        try {
+            if ((field.getType() == boolean.class || field.getType() == Boolean.class)
+                    && !condition.equalsIgnoreCase("true") && !condition.equalsIgnoreCase("false")) {
+                throw new IllegalArgumentException("Expected true or false");
+            }
+            return convert(field.getType(), condition);
+        } catch (IllegalArgumentException | java.time.DateTimeException exception) {
+            throw new IllegalStateException("Invalid fixed condition for " + field, exception);
+        }
     }
 
     @SuppressWarnings({ "rawtypes", "unchecked" })
     private <T> void applyFilters(Class<T> entityType, CriteriaBuilder cb, Root<T> root,
-            MultivaluedMap<String, String> parameters, List<Predicate> predicates) {
+            MultivaluedMap<String, String> parameters, List<Predicate> predicates,
+            List<Predicate> alternatives, Set<String> handledOrParameters) {
         QueryableFilterContext<T> context = new QueryableFilterContext<>(cb, root, parameters);
         for (QueryableFilterMarker marker : filterBeans) {
             QueryableFilter filter = (QueryableFilter) marker;
@@ -235,7 +379,12 @@ public class QueryableEngine {
                 filter.contribute(context);
             }
         }
+        if (!context.orParameters().isEmpty() && context.orPredicates().isEmpty()) {
+            throw new BadRequestException("Custom OR query parameters produced no predicates");
+        }
         predicates.addAll(context.predicates());
+        alternatives.addAll(context.orPredicates());
+        handledOrParameters.addAll(context.orParameters());
     }
 
     @SuppressWarnings({ "rawtypes", "unchecked" })
@@ -271,9 +420,14 @@ public class QueryableEngine {
             MultivaluedMap<String, String> parameters, List<Predicate> predicates) {
         String value = parameters.getFirst(parameterName);
         if (value != null) {
-            predicates.add(cb.like(cb.lower(path(root, field.getName())),
-                    "%" + value.toLowerCase(Locale.ROOT) + "%"));
+            addLikeValue(field, value, cb, root, predicates);
         }
+    }
+
+    private <T> void addLikeValue(Field field, String value, CriteriaBuilder cb, Root<T> root,
+            List<Predicate> predicates) {
+        predicates.add(cb.like(cb.lower(path(root, field.getName())),
+                "%" + value.toLowerCase(Locale.ROOT) + "%"));
     }
 
     private <T> void addList(Field field, String parameterName, CriteriaBuilder cb, Root<T> root,

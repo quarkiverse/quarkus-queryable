@@ -5,7 +5,7 @@
     <parent>
         <groupId>dev.queryable</groupId>
         <artifactId>quarkus-queryable-parent</artifactId>
-        <version>4.0.1</version>
+        <version>4.0.2</version>
     </parent>
     <artifactId>quarkus-queryable-deployment</artifactId>
     <name>Quarkus Queryable - Deployment</name>

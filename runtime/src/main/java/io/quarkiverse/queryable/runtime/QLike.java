@@ -12,5 +12,7 @@ public @interface QLike {
 
     String name() default "";
 
+    String condition() default "";
+
     QOption[] options() default {};
 }

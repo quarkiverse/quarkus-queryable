@@ -16,7 +16,7 @@ class ProductResourceTest {
         given()
                 .contentType(ContentType.JSON)
                 .body("""
-                        {"name":"Quarkus mug","price":19.90,"active":true}
+                        {"name":"Quarkus mug","price":19.90,"active":true,"visibility":"PUBLIC"}
                         """)
                 .post("/api/products")
                 .then()
@@ -41,6 +41,25 @@ class ProductResourceTest {
                 .then().statusCode(200)
                 .body("$", hasSize(1))
                 .header("listSize", "1");
+
+        given().queryParam("obj.visibility", "PRIVATE")
+                .get("/api/products")
+                .then().statusCode(200)
+                .body("$", hasSize(1))
+                .header("listSize", "1");
+
+        given().queryParam("or.like.name", "missing", "mug")
+                .queryParam("or.obj.price", "0")
+                .get("/api/products")
+                .then().statusCode(200)
+                .body("$", hasSize(1))
+                .header("listSize", "1");
+
+        given().queryParam("only.premium", "")
+                .get("/api/products")
+                .then().statusCode(200)
+                .body("$", hasSize(0))
+                .header("listSize", "0");
 
         given().get("/api/products/count")
                 .then()

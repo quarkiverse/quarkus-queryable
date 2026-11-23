@@ -42,8 +42,80 @@ produce validated Criteria API predicates at runtime.
 |Default ordering
 |===
 
-NOTE: The `options` attribute and `QOption` values are currently not applied
-by the extension. Do not rely on `EXECUTE_ALWAYS` or `WITHOUT_PARAMETERS`.
+== OR filters
+
+Prefix supported query parameters with `or.` to combine their predicates in
+one OR group. Repeat a parameter to include multiple values:
+
+[source,text]
+----
+GET /customers?or.obj.name=Alice&or.obj.name=Bob
+GET /customers?or.obj.name=Alice&or.like.surname=rossi
+----
+
+The usual operator is unchanged: `or.obj.name` tests equality, whereas
+`or.like.surname` performs a case-insensitive substring search. `@Q` equality
+and ranges, `@QLike`, `@QList`, `@QLikeList`, `@QNil` and `@QNotNil` are
+supported, using their configured parameter names. Comma-separated list
+values retain their usual semantics. Each occurrence contributes an
+alternative, including multiple values for the same parameter.
+
+All non-prefixed filters remain in AND with the OR group. For example,
+`?obj.country=IT&or.obj.name=Alice&or.obj.name=Bob` means
+`country = 'IT' AND (name = 'Alice' OR name = 'Bob')`. The same filters
+apply to the result and `listSize`, before pagination.
+
+No new annotations are needed, but a field must already expose the corresponding
+filter. `@QLogicalDelete`, fixed `EXECUTE_ALWAYS` conditions and Hibernate
+`@QFilter` conditions remain in AND and cannot be placed in the OR group.
+Unsupported or invalid `or.*` parameters return HTTP 400. These filters are
+not authorization controls. The separate `/count` endpoint is not filtered.
+
+== Query options
+
+`QOption.EXECUTE_ALWAYS` applies a fixed condition on every collection query
+when used with `@Q` or `@QLike`. Set a non-empty `condition`: `@Q` converts it
+to the field type and uses equality; `@QLike` uses a case-insensitive
+substring. Query parameters for that annotation, including `from` and `to`
+ranges for `@Q`, are ignored.
+
+[source,java]
+----
+@Enumerated(EnumType.STRING)
+@Q(condition = "BLANK_DELIVERY", options = QOption.EXECUTE_ALWAYS)
+public OperationType operationType;
+
+@QLike(condition = "ACME", options = QOption.EXECUTE_ALWAYS)
+public String customerName;
+----
+
+An empty or invalid fixed condition is a configuration error. A `condition`
+without `EXECUTE_ALWAYS` is also rejected. Fixed predicates apply to the
+collection and its `listSize` count, not to the separate `/count` endpoint
+or other CRUD operations; do not use them as authorization.
+
+`QOption.WITHOUT_PARAMETERS` is supported on `@QFilter` for activating an
+existing Hibernate filter without binding REST values:
+
+[source,java]
+----
+@FilterDef(name = "Contract.current")
+@Filter(name = "Contract.current", condition = "archived = false")
+@QFilter(name = "Contract.current", queryParam = "only.current",
+    options = QOption.WITHOUT_PARAMETERS)
+public class Contract extends PanacheEntityBase {
+    // Entity fields and identifier
+}
+----
+
+`GET /contracts?only.current` activates the filter; the query parameter's
+value is ignored. Omit `filterParam` and define only one `@QFilter` mapping for
+that filter. Hibernate filter parameters must either be absent or have a
+Hibernate resolver; otherwise the configuration is rejected. Without the REST
+parameter, Queryable does not activate the filter.
+
+Other `QOption` combinations are not supported. The `options` attributes on
+`@QList`, `@QLikeList`, `@QNil` and `@QNotNil` are currently ignored.
 
 == Custom filters
 
@@ -66,6 +138,21 @@ public class DeveloperFilter implements QueryableFilter<Developer> {
 
 Custom filters receive a `CriteriaBuilder`, entity `Root`, query parameters and
 can add JPA predicates without replacing generated REST resources.
+
+Custom Criteria filters can opt in to the same OR group:
+
+[source,java]
+----
+for (String city : context.orParams("address.city")) {
+    context.addOr(context.criteriaBuilder().equal(
+            context.root().get("address").get("city"), city));
+}
+----
+
+`orParams("address.city")` reads all occurrences of `or.address.city` and
+marks the parameter as handled. The contributor is responsible for validating
+its values and adding predicates; return a REST error for invalid values.
+Custom parameters are not automatically listed in generated OpenAPI.
 
 The entity type is inferred from `QueryableFilter<Developer>`, including when
 it is declared on a generic superclass. Existing implementations that override

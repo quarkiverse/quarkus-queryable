@@ -37,6 +37,7 @@ import io.quarkus.hibernate.orm.panache.PanacheEntity;
 @QFilter(name = "Customer.invalidSql", queryParam = "test.invalid_sql", filterParam = "value")
 public class Customer extends PanacheEntity {
 
+    @Q
     @QLike
     public String name;
 

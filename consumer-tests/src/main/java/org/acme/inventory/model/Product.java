@@ -4,6 +4,7 @@ import io.quarkiverse.queryable.runtime.Q;
 import io.quarkiverse.queryable.runtime.QFilter;
 import io.quarkiverse.queryable.runtime.QLike;
 import io.quarkiverse.queryable.runtime.QLogicalDelete;
+import io.quarkiverse.queryable.runtime.QOption;
 import io.quarkiverse.queryable.runtime.QOrderBy;
 import io.quarkiverse.queryable.runtime.QRs;
 import io.quarkus.hibernate.orm.panache.PanacheEntityBase;
@@ -24,6 +25,9 @@ import java.math.BigDecimal;
 @FilterDef(name = "Product.minPrice", parameters = @ParamDef(name = "minimum", type = BigDecimal.class))
 @Filter(name = "Product.minPrice", condition = "price >= :minimum")
 @QFilter(name = "Product.minPrice", queryParam = "min.price", filterParam = "minimum")
+@FilterDef(name = "Product.premium")
+@Filter(name = "Product.premium", condition = "price >= 20")
+@QFilter(name = "Product.premium", queryParam = "only.premium", options = QOption.WITHOUT_PARAMETERS)
 public class Product extends PanacheEntityBase {
 
     @UuidGenerator
@@ -35,6 +39,9 @@ public class Product extends PanacheEntityBase {
 
     @Q
     public BigDecimal price;
+
+    @Q(condition = "PUBLIC", options = QOption.EXECUTE_ALWAYS)
+    public String visibility;
 
     @QLogicalDelete
     public boolean active = true;

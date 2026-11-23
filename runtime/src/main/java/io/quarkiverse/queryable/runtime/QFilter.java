@@ -16,7 +16,9 @@ public @interface QFilter {
 
     String queryParam();
 
-    String filterParam();
+    String filterParam() default "";
+
+    QOption[] options() default {};
 
     @Inherited
     @Retention(RetentionPolicy.RUNTIME)

@@ -6,6 +6,7 @@ import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.notNullValue;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -109,6 +110,73 @@ class QueryableResourceTest {
     }
 
     @Test
+    void combinesRepeatedAndDifferentOrParametersWithMandatoryAndFilters() {
+        authenticated().queryParam("or.obj.name", "Mario Rossi", "Mario Bianchi", "Luigi Verdi")
+                .queryParam("pageSize", "1")
+                .queryParam("orderBy", "name asc")
+                .get("/api/v1/customers").then().statusCode(200)
+                .body("$", hasSize(1))
+                .body("[0].name", equalTo("Mario Bianchi"))
+                .header("listSize", "2");
+
+        authenticated().queryParam("or.obj.name", "Mario")
+                .get("/api/v1/customers").then().statusCode(200)
+                .body("$", hasSize(0));
+        authenticated().queryParam("or.like.name", "rossi")
+                .queryParam("or.obj.externalCode", "FR-002")
+                .queryParam("obj.countries", "FR")
+                .get("/api/v1/customers").then().statusCode(200)
+                .body("$", hasSize(1))
+                .body("[0].externalCode", equalTo("FR-002"))
+                .header("listSize", "1");
+    }
+
+    @Test
+    void combinesCustomRangeListAndNullAlternatives() {
+        authenticated().queryParam("or.address.city", "Milano", "Roma")
+                .queryParam("or.from.createdOn", "2026-02-01")
+                .queryParam("or.obj.countries", "DE")
+                .get("/api/v1/customers").then().statusCode(200)
+                .body("$", hasSize(2))
+                .header("listSize", "2");
+        authenticated().queryParam("or.to.createdOn", "2026-01-10")
+                .queryParam("or.nil.notes", "")
+                .get("/api/v1/customers").then().statusCode(200)
+                .body("$", hasSize(2));
+        authenticated().queryParam("or.notNil.notes", "")
+                .get("/api/v1/customers").then().statusCode(200)
+                .body("$", hasSize(1))
+                .body("[0].externalCode", equalTo("IT-001"));
+        authenticated().queryParam("or.address.city", "Milano")
+                .queryParam("obj.coordinator_id", "1")
+                .queryParam("obj.coordinator_country", "IT")
+                .get("/api/v1/customers").then().statusCode(200)
+                .body("$", hasSize(1)).header("listSize", "1");
+    }
+
+    @Test
+    void rejectsUnsupportedProtectedAndInvalidOrParameters() {
+        authenticated().queryParam("or.obj.active", "false")
+                .get("/api/v1/customers").then().statusCode(400);
+        authenticated().queryParam("or.obj.coordinator_id", "1")
+                .get("/api/v1/customers").then().statusCode(400);
+        authenticated().queryParam("or.unknown", "x")
+                .get("/api/v1/customers").then().statusCode(400);
+        authenticated().queryParam("or.from.createdOn", "invalid")
+                .get("/api/v1/customers").then().statusCode(400);
+        authenticated().queryParam("or.obj.countries", ",")
+                .get("/api/v1/customers").then().statusCode(400);
+        given().queryParam("or.obj.country", "FR")
+                .get("/api/options").then().statusCode(400);
+        given().queryParam("or.from.rating", "1")
+                .get("/api/options").then().statusCode(400);
+        given().queryParam("or.only.current", "")
+                .get("/api/options").then().statusCode(400);
+        given().queryParam("or.obj.archived", "invalid")
+                .get("/api/options").then().statusCode(400);
+    }
+
+    @Test
     void supportsCustomContributorOrderingAndPagination() {
         authenticated()
                 .queryParam("address.city", "Milano")
@@ -155,6 +223,49 @@ class QueryableResourceTest {
                 .get("/api/v1/customers").then().statusCode(400);
         authenticated().queryParam("obj.coordinator_id", "1")
                 .get("/api/v1/customers").then().statusCode(400);
+    }
+
+    @Test
+    void appliesFixedConditionsRegardlessOfRequestParameters() {
+        given().get("/api/options").then().statusCode(200)
+                .body("$", hasSize(2))
+                .body("name", hasItem("Alice"))
+                .body("name", hasItem("Alana"))
+                .header("listSize", "2");
+
+        given().queryParam("obj.country", "FR")
+                .queryParam("like.name", "Adam")
+                .queryParam("from.rating", "20")
+                .queryParam("obj.enabled", "false")
+                .queryParam("obj.state", "CLOSED")
+                .get("/api/options").then().statusCode(200)
+                .body("$", hasSize(2))
+                .header("listSize", "2");
+    }
+
+    @Test
+    void activatesParameterlessHibernateFilterWhenFlagIsPresent() {
+        given().get("/api/options?only.current").then().statusCode(200)
+                .body("$", hasSize(1))
+                .body("[0].name", equalTo("Alice"))
+                .header("listSize", "1");
+        given().queryParam("only.current", "")
+                .get("/api/options").then().statusCode(200)
+                .body("$", hasSize(1))
+                .body("[0].name", equalTo("Alice"))
+                .header("listSize", "1");
+        given().queryParam("only.current", "false")
+                .get("/api/options").then().statusCode(200)
+                .body("$", hasSize(1))
+                .header("listSize", "1");
+        given().queryParam("only.resolved", "")
+                .get("/api/options").then().statusCode(200)
+                .body("$", hasSize(1))
+                .body("[0].name", equalTo("Alice"))
+                .header("listSize", "1");
+        given().get("/api/options").then().statusCode(200)
+                .body("$", hasSize(2))
+                .header("listSize", "2");
     }
 
     @Test
@@ -271,8 +382,19 @@ class QueryableResourceTest {
                 .asString();
         JsonPath document = JsonPath.from(documentText);
         assertThat(document.getList("paths['/api/v1/customers'].get.parameters.name"), hasItem("like.name"));
+        assertThat(document.getList("paths['/api/v1/customers'].get.parameters.name"), hasItem("or.like.name"));
+        assertThat(document.getList("paths['/api/v1/customers'].get.parameters.name"), hasItem("or.obj.name"));
+        assertThat(document.getList("paths['/api/v1/customers'].get.parameters.name"), hasItem("or.from.createdOn"));
+        assertThat(document.getList("paths['/api/v1/customers'].get.parameters.name"), not(hasItem("or.obj.active")));
+        assertThat(document.getList("paths['/api/v1/customers'].get.parameters.name"),
+                not(hasItem("or.obj.coordinator_id")));
         assertThat(document.getList("paths['/api/v1/customers'].get.parameters.name"), hasItem("obj.coordinator_id"));
         assertThat(document.getList("paths['/api/v1/customers'].get.parameters.name"), hasItem("obj.coordinator_country"));
+        assertThat(document.getList("paths['/api/options'].get.parameters.name"), hasItem("only.current"));
+        assertThat(document.getList("paths['/api/options'].get.parameters.name"), not(hasItem("obj.country")));
+        assertThat(document.getList("paths['/api/options'].get.parameters.name"), not(hasItem("like.name")));
+        assertThat(document.getList("paths['/api/options'].get.parameters.name"), not(hasItem("from.rating")));
+        assertThat(document.getList("paths['/api/options'].get.parameters.name"), not(hasItem("or.obj.country")));
         assertThat(document.getMap("paths['/api/v1/customers'].post"), notNullValue());
         assertThat(document.getMap("paths['/api/v1/customers/{id}'].put"), notNullValue());
         assertThat(document.getMap("paths['/api/v1/customers/count'].get"), notNullValue());
@@ -313,6 +435,12 @@ class QueryableResourceTest {
                 .body("$", hasSize(2))
                 .body("[0].name", equalTo("primo"))
                 .body("[1].name", equalTo("secondo"));
+
+        given().queryParam("or.like.tags", "react,java")
+                .get("/api/teams").then().statusCode(200)
+                .body("$", hasSize(2));
+        given().queryParam("or.like.tags", ",")
+                .get("/api/teams").then().statusCode(400);
 
         given().contentType(ContentType.JSON)
                 .body("""

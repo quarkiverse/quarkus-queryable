@@ -2,3 +2,11 @@ insert into Customer(id, name, externalCode, country, createdOn, notes, retiredO
 insert into Customer(id, name, externalCode, country, createdOn, notes, retiredOn, active, city) values (2, 'Mario Bianchi', 'FR-002', 'FR', '2026-02-12', 'preferred', '2026-06-01', true, 'Parigi');
 insert into Customer(id, name, externalCode, country, createdOn, notes, retiredOn, active, city) values (3, 'Luigi Verdi', 'DE-003', 'DE', '2025-12-01', null, null, false, 'Roma');
 alter sequence Customer_SEQ restart with 100;
+insert into OptionSample(id, country, name, rating, enabled, state, archived) values (1, 'IT', 'Alice', 10, true, 'OPEN', false);
+insert into OptionSample(id, country, name, rating, enabled, state, archived) values (2, 'IT', 'Alana', 10, true, 'OPEN', true);
+insert into OptionSample(id, country, name, rating, enabled, state, archived) values (3, 'FR', 'Alice', 10, true, 'OPEN', false);
+insert into OptionSample(id, country, name, rating, enabled, state, archived) values (4, 'IT', 'Alice', 20, true, 'OPEN', false);
+insert into OptionSample(id, country, name, rating, enabled, state, archived) values (5, 'IT', 'Adam', 10, true, 'OPEN', false);
+insert into OptionSample(id, country, name, rating, enabled, state, archived) values (6, 'IT', 'Alice', 10, false, 'OPEN', false);
+insert into OptionSample(id, country, name, rating, enabled, state, archived) values (7, 'IT', 'Alice', 10, true, 'CLOSED', false);
+alter sequence OptionSample_SEQ restart with 100;

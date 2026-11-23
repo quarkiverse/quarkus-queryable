@@ -12,5 +12,7 @@ public @interface Q {
 
     String name() default "";
 
+    String condition() default "";
+
     QOption[] options() default {};
 }

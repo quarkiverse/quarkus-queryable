@@ -1,6 +1,7 @@
 package io.quarkiverse.queryable.deployment;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -249,11 +250,14 @@ class QueryableProcessor {
 
     private List<String> queryParameters(ClassInfo entity, IndexView index) {
         Set<String> result = new LinkedHashSet<>();
+        Set<String> protectedParameters = new LinkedHashSet<>();
         for (ClassInfo current = entity; current != null; current = index.getClassByName(current.superName())) {
             List<AnnotationInstance> filters = current.declaredAnnotationsWithRepeatable(Q_FILTER, Q_FILTERS);
             if (!filters.isEmpty()) {
                 for (AnnotationInstance filter : filters) {
-                    result.add(filter.value("queryParam").asString());
+                    String name = filter.value("queryParam").asString();
+                    result.add(name);
+                    protectedParameters.add(name);
                 }
                 break;
             }
@@ -262,34 +266,79 @@ class QueryableProcessor {
             }
         }
         for (FieldInfo field : entity.fields()) {
-            addParameter(result, field, Q, "obj");
-            addParameter(result, field, Q_LIKE, "like");
-            addParameter(result, field, Q_LIST, "obj");
-            addParameter(result, field, Q_LIKE_LIST, "like");
-            addParameter(result, field, Q_NIL, "nil");
-            addParameter(result, field, Q_NOT_NIL, "notNil");
-            addParameter(result, field, Q_LOGICAL_DELETE, "obj");
-            if (field.hasAnnotation(Q)) {
-                result.add("from." + field.name());
-                result.add("to." + field.name());
+            AnnotationInstance logicalDelete = field.annotation(Q_LOGICAL_DELETE);
+            if (logicalDelete != null) {
+                protectedParameters.add(parameterName(field, logicalDelete, "obj", false));
+            }
+            AnnotationInstance equal = field.annotation(Q);
+            if (equal != null && executeAlways(equal)) {
+                protectedParameters.add(parameterName(field, equal, "obj", true));
+                String name = fieldName(field, equal);
+                protectedParameters.add("from." + name);
+                protectedParameters.add("to." + name);
+            }
+            AnnotationInstance like = field.annotation(Q_LIKE);
+            if (like != null && executeAlways(like)) {
+                protectedParameters.add(parameterName(field, like, "like", false));
+            }
+        }
+        for (FieldInfo field : entity.fields()) {
+            addParameter(result, field, Q, "obj", protectedParameters);
+            addParameter(result, field, Q_LIKE, "like", protectedParameters);
+            addParameter(result, field, Q_LIST, "obj", protectedParameters);
+            addParameter(result, field, Q_LIKE_LIST, "like", protectedParameters);
+            addParameter(result, field, Q_NIL, "nil", protectedParameters);
+            addParameter(result, field, Q_NOT_NIL, "notNil", protectedParameters);
+            addParameter(result, field, Q_LOGICAL_DELETE, "obj", protectedParameters);
+            if (field.hasAnnotation(Q) && !executeAlways(field.annotation(Q))) {
+                String name = fieldName(field, field.annotation(Q));
+                addQueryParameter(result, "from." + name, protectedParameters);
+                addQueryParameter(result, "to." + name, protectedParameters);
             }
         }
         return List.copyOf(result);
     }
 
     private void addParameter(Set<String> result, FieldInfo field, DotName annotationName,
-            String defaultPrefix) {
+            String defaultPrefix, Set<String> protectedParameters) {
         AnnotationInstance annotation = field.annotation(annotationName);
         if (annotation == null) {
             return;
         }
+        if ((annotationName.equals(Q) || annotationName.equals(Q_LIKE)) && executeAlways(annotation)) {
+            return;
+        }
+        String name = parameterName(field, annotation, defaultPrefix, annotationName.equals(Q));
+        if (annotationName.equals(Q_LOGICAL_DELETE)) {
+            result.add(name);
+        } else {
+            addQueryParameter(result, name, protectedParameters);
+        }
+    }
+
+    private void addQueryParameter(Set<String> result, String name, Set<String> protectedParameters) {
+        result.add(name);
+        if (!protectedParameters.contains(name)) {
+            result.add("or." + name);
+        }
+    }
+
+    private String parameterName(FieldInfo field, AnnotationInstance annotation, String defaultPrefix, boolean equal) {
         org.jboss.jandex.AnnotationValue prefixValue = annotation.value("prefix");
+        String prefix = prefixValue == null ? defaultPrefix : prefixValue.asString();
+        String name = fieldName(field, annotation);
+        return equal || !prefix.isBlank() ? prefix + "." + name : name;
+    }
+
+    private String fieldName(FieldInfo field, AnnotationInstance annotation) {
         org.jboss.jandex.AnnotationValue nameValue = annotation.value("name");
-        String prefix = prefixValue == null ? null : prefixValue.asString();
         String name = nameValue == null ? null : nameValue.asString();
-        String actualPrefix = prefix == null || prefix.isBlank() ? defaultPrefix : prefix;
-        String actualName = name == null || name.isBlank() ? field.name() : name;
-        result.add(actualPrefix + "." + actualName);
+        return name == null || name.isBlank() ? field.name() : name;
+    }
+
+    private boolean executeAlways(AnnotationInstance annotation) {
+        org.jboss.jandex.AnnotationValue options = annotation.value("options");
+        return options != null && Arrays.asList(options.asEnumArray()).contains("EXECUTE_ALWAYS");
     }
 
     private static void addParameter(List<Class<?>> types, List<String> names, List<String> defaults,
