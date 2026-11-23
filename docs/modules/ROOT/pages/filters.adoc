@@ -42,6 +42,9 @@ produce validated Criteria API predicates at runtime.
 |Default ordering
 |===
 
+NOTE: The `options` attribute and `QOption` values are currently not applied
+by the extension. Do not rely on `EXECUTE_ALWAYS` or `WITHOUT_PARAMETERS`.
+
 == Custom filters
 
 Place custom filters in `service.filters` and implement `QueryableFilter<T>`.

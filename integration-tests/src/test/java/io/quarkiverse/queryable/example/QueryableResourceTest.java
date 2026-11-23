@@ -60,14 +60,16 @@ class QueryableResourceTest {
                 .get("/api/v1/customers")
                 .then()
                 .statusCode(200)
-                .body("$", hasSize(1));
+                .body("$", hasSize(1))
+                .body("[0].externalCode", equalTo("FR-002"));
 
         authenticated()
                 .queryParam("notNil.notes", "1")
                 .get("/api/v1/customers")
                 .then()
                 .statusCode(200)
-                .body("$", hasSize(1));
+                .body("$", hasSize(1))
+                .body("[0].externalCode", equalTo("IT-001"));
 
         authenticated()
                 .queryParam("obj.active", "false")
@@ -75,6 +77,35 @@ class QueryableResourceTest {
                 .then()
                 .statusCode(200)
                 .body("$", hasSize(1));
+    }
+
+    @Test
+    void appliesEqualityRangesAndDefaultLogicalDelete() {
+        authenticated().queryParam("obj.externalCode", "IT-001")
+                .queryParam("obj.createdOn", "2026-01-10")
+                .get("/api/v1/customers").then().statusCode(200)
+                .body("$", hasSize(1))
+                .body("[0].name", equalTo("Mario Rossi"));
+
+        authenticated().queryParam("from.createdOn", "2026-02-12")
+                .queryParam("to.createdOn", "2026-02-12")
+                .get("/api/v1/customers").then().statusCode(200)
+                .body("$", hasSize(1))
+                .body("[0].externalCode", equalTo("FR-002"));
+
+        authenticated().queryParam("obj.externalCode", "DE-003")
+                .get("/api/v1/customers").then().statusCode(200)
+                .body("$", hasSize(0));
+    }
+
+    @Test
+    void combinesCaseInsensitiveLikeAndTrimmedInValues() {
+        authenticated().queryParam("like.name", "mArIo")
+                .queryParam("obj.countries", " IT , DE ")
+                .get("/api/v1/customers").then().statusCode(200)
+                .body("$", hasSize(1))
+                .body("[0].externalCode", equalTo("IT-001"))
+                .header("listSize", "1");
     }
 
     @Test
