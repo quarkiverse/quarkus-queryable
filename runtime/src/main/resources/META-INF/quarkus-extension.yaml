@@ -1,0 +1,11 @@
+name: Queryable
+description: Build-time generated filtering and REST resources for annotated Panache entities
+metadata:
+  keywords:
+    - queryable
+    - panache
+    - rest
+  guide: https://docs.quarkiverse.io/quarkus-queryable/dev/
+  categories:
+    - "data"
+  status: "preview"

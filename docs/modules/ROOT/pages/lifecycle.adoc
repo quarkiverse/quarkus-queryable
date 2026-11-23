@@ -1,0 +1,71 @@
+= REST lifecycle
+
+Lifecycle behavior belongs in `service.rs` and is implemented with
+`QueryableRsListener<T>`.
+
+== Callback annotations
+
+[cols="1,2"]
+|===
+|Phase |Callbacks
+
+|Fetch
+|`@PreFetch`, `@PostFetch`
+
+|List
+|`@PreList`, `@PostList`
+
+|Create
+|`@PrePersist`, `@PostPersist`
+
+|Update
+|`@PreUpdate`, `@PostUpdate`
+
+|Delete
+|`@PreDelete`, `@PostDelete`
+|===
+
+A callback may accept:
+
+* no argument;
+* the entity;
+* the entity identifier;
+* `List<T>` for `@PostList`;
+* `QueryableEvent<T>` for access to all operation metadata.
+
+== Audit fields
+
+[source,java]
+----
+@ApplicationScoped
+public class DeveloperRsListener implements QueryableRsListener<Developer> {
+
+    @Inject
+    SecurityIdentity identity;
+
+    @Override
+    public Class<Developer> entityType() {
+        return Developer.class;
+    }
+
+    @PrePersist
+    void beforeCreate(Developer developer) {
+        developer.creationDate = LocalDateTime.now();
+        developer.creationUser = identity.getPrincipal().getName();
+    }
+
+    @PreUpdate
+    void beforeUpdate(Developer developer) {
+        Developer persisted = Developer.findById(developer.uuid);
+        developer.creationDate = persisted.creationDate;
+        developer.creationUser = persisted.creationUser;
+        developer.updateDate = LocalDateTime.now();
+        developer.updateUser = identity.getPrincipal().getName();
+    }
+}
+----
+
+Pre-callbacks execute before persistence and can reject or mutate the entity.
+Post-callbacks for write operations are registered as JTA synchronizations and
+run only after commit. Exceptions from post-callbacks are logged and cannot
+roll back a transaction that already committed.

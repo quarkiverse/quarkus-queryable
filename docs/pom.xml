@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>io.quarkiverse.queryable</groupId>
+        <artifactId>quarkus-queryable-parent</artifactId>
+        <version>4.0.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>quarkus-queryable-docs</artifactId>
+    <name>Quarkus Queryable - Documentation</name>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.quarkiverse.queryable</groupId>
+            <artifactId>quarkus-queryable-deployment</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.asciidoctor</groupId>
+                <artifactId>asciidoctor-maven-plugin</artifactId>
+                <configuration>
+                    <sourceDocumentName>index.adoc</sourceDocumentName>
+                    <sourceDirectory>${project.basedir}/modules/ROOT/pages</sourceDirectory>
+                    <outputDirectory>${project.build.directory}/generated-docs</outputDirectory>
+                    <attributes>
+                        <project-version>${project.version}</project-version>
+                    </attributes>
+                </configuration>
+            </plugin>
+            <plugin>
+                <artifactId>maven-resources-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>copy-images</id>
+                        <phase>prepare-package</phase>
+                        <goals>
+                            <goal>copy-resources</goal>
+                        </goals>
+                        <configuration>
+                            <outputDirectory>${project.build.directory}/generated-docs/_images</outputDirectory>
+                            <resources>
+                                <resource>
+                                    <directory>${project.basedir}/modules/ROOT/assets/images</directory>
+                                </resource>
+                            </resources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

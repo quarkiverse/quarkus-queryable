@@ -1,0 +1,23 @@
+= Security
+
+Queryable does not introduce a parallel authorization system. Use normal
+Quarkus HTTP security policies.
+
+[source,properties]
+----
+quarkus.http.auth.permission.developers.paths=/api/developers/*
+quarkus.http.auth.permission.developers.policy=authenticated
+
+quarkus.http.auth.permission.developers-list.paths=/api/developers
+quarkus.http.auth.permission.developers-list.policy=authenticated
+----
+
+The policy applies equally to REST Data Panache CRUD endpoints and the
+Queryable collection endpoint.
+
+Lifecycle listeners can inject `SecurityIdentity` and write the authenticated
+principal into audit fields. Keep fields such as `creationUser` and
+`creationDate` server-owned by restoring them in `@PreUpdate`.
+
+For role-specific authorization, use standard Quarkus permission policies,
+OIDC/JWT or the security extension used by the consuming application.

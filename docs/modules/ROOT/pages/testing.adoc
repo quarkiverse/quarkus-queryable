@@ -1,0 +1,41 @@
+= Testing real applications
+
+The repository uses three validation layers.
+
+== Extension integration tests
+
+`integration-tests` is a complete Quarkus application that validates entities,
+REST endpoints, filters, CDI hooks, OpenAPI, security and post-commit side
+effects.
+
+[source,shell]
+----
+mvn clean install
+----
+
+== Standalone consumer smoke test
+
+`consumer-tests` is deliberately not part of the Maven reactor. It consumes the
+extension as an installed dependency, exactly like an external Quarkus
+application.
+
+[source,shell]
+----
+mvn install -DskipTests
+mvn -f consumer-tests/pom.xml test
+----
+
+== Pilot matrix
+
+Before a release, validate at least one real application from each category:
+
+* PostgreSQL CRUD service;
+* entity with custom `QueryableFilter`;
+* service using OIDC/JWT and `SecurityIdentity`;
+* service overriding list/query behavior;
+* existing Queryable 3 project migrated incrementally;
+* JVM build, dev mode and native build.
+
+The CI workflow runs with a parameterized `quarkus.version`. Add the oldest
+supported LTS and the current supported Quarkus line to the matrix. Ecosystem
+CI should later verify Quarkus `main` snapshots.

@@ -1,0 +1,76 @@
+= Quarkus Queryable
+
+Queryable adds expressive collection queries to Quarkus applications using
+Hibernate ORM REST Data with Panache.
+
+The extension generates bytecode during Quarkus augmentation. Standard CRUD,
+counting, OpenAPI and transactions remain owned by the official
+`quarkus-hibernate-orm-rest-data-panache` extension.
+
+== Installation
+
+[source,xml,subs=attributes+]
+----
+<dependency>
+    <groupId>io.quarkiverse.queryable</groupId>
+    <artifactId>quarkus-queryable</artifactId>
+    <version>{project-version}</version>
+</dependency>
+----
+
+The extension declares its required Quarkus runtime extensions. Applications
+still need to select a JDBC driver and JSON provider.
+
+== Minimal example
+
+[source,java]
+----
+@Entity
+@QRs("/api/developers")
+@QOrderBy("surname asc")
+public class Developer extends PanacheEntityBase {
+
+    @UuidGenerator
+    @Id
+    @QList
+    public String uuid;
+
+    @QLike
+    public String name;
+
+    @QLike
+    public String surname;
+
+    @QList
+    public String team_uuid;
+
+    @QLogicalDelete
+    public boolean active = true;
+}
+----
+
+This exposes the standard REST Data Panache CRUD endpoints and the Queryable
+collection endpoint:
+
+[source,text]
+----
+GET /api/developers?like.surname=pi
+GET /api/developers?obj.team_uuid=<uuid>
+GET /api/developers?obj.active=false
+----
+
+== Generated behavior
+
+REST Data Panache owns these operations:
+
+* `POST /api/developers`
+* `GET /api/developers/{id}`
+* `PUT /api/developers/{id}`
+* `DELETE /api/developers/{id}`
+* `GET /api/developers/count`
+
+Queryable replaces only the collection `GET` so it can support the established
+Queryable parameter language.
+
+See xref:filters.adoc[Query filters], xref:lifecycle.adoc[REST lifecycle] and
+xref:security.adoc[Security].

@@ -1,0 +1,70 @@
+= Query filters
+
+Queryable annotations are read by Jandex during Quarkus augmentation. They
+produce validated Criteria API predicates at runtime.
+
+== Built-in annotations
+
+[cols="1,2,2"]
+|===
+|Annotation |Default parameter |Behavior
+
+|`@Q`
+|`obj.<field>`
+|Equality; `from.<field>` and `to.<field>` ranges for comparable values
+
+|`@QLike`
+|`like.<field>`
+|Case-insensitive substring
+
+|`@QList`
+|`obj.<field>`
+|Comma-separated `IN`
+
+|`@QLikeList`
+|`like.<field>`
+|OR of comma-separated substring predicates
+
+|`@QNil`
+|`nil.<field>`
+|`IS NOT NULL`, preserving Queryable legacy semantics
+
+|`@QNotNil`
+|`notNil.<field>`
+|`IS NULL`, preserving Queryable legacy semantics
+
+|`@QLogicalDelete`
+|`obj.<field>`
+|Defaults to the true/active value
+
+|`@QOrderBy`
+|Entity annotation
+|Default ordering
+|===
+
+== Custom filters
+
+Place custom filters in `service.filters` and implement `QueryableFilter<T>`.
+
+[source,java]
+----
+@ApplicationScoped
+public class DeveloperFilter implements QueryableFilter<Developer> {
+    @Override
+    public Class<Developer> entityType() {
+        return Developer.class;
+    }
+
+    @Override
+    public void contribute(QueryableFilterContext<Developer> context) {
+        String team = context.param("team.code");
+        if (team != null) {
+            context.add(context.criteriaBuilder().equal(
+                    context.root().get("team").get("code"), team));
+        }
+    }
+}
+----
+
+Custom filters receive a `CriteriaBuilder`, entity `Root`, query parameters and
+can add JPA predicates without replacing generated REST resources.
