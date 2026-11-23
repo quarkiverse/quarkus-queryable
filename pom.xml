@@ -6,11 +6,28 @@
         <artifactId>quarkiverse-parent</artifactId>
         <version>26</version>
     </parent>
-    <groupId>io.quarkiverse.queryable</groupId>
+    <groupId>dev.queryable</groupId>
     <artifactId>quarkus-queryable-parent</artifactId>
-    <version>4.0.0-SNAPSHOT</version>
+    <version>4.0.0</version>
     <packaging>pom</packaging>
     <name>Quarkus Queryable - Parent</name>
+    <description>Queryable collection filters for Quarkus Hibernate ORM REST Data with Panache.</description>
+    <url>https://queryable.dev/</url>
+
+    <licenses>
+        <license>
+            <name>Apache License, Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <developers>
+        <developer>
+            <id>fiorenzino</id>
+            <name>Fiorenzo Pizza</name>
+        </developer>
+    </developers>
 
     <modules>
         <module>deployment</module>
@@ -21,7 +38,7 @@
         <connection>scm:git:git@github.com:queryabledev/quarkus-queryable.git</connection>
         <developerConnection>scm:git:git@github.com:queryabledev/quarkus-queryable.git</developerConnection>
         <url>https://github.com/queryabledev/quarkus-queryable</url>
-        <tag>HEAD</tag>
+        <tag>4.0.0</tag>
     </scm>
 
     <properties>
@@ -47,6 +64,25 @@
     </dependencyManagement>
 
     <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>validate-project-structure</id>
+                        <configuration>
+                            <rules>
+                                <requireMatchingCoordinates>
+                                    <groupIdPattern>dev\.queryable.*</groupIdPattern>
+                                    <message>Queryable artifacts must use the dev.queryable namespace.</message>
+                                </requireMatchingCoordinates>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
         <pluginManagement>
             <plugins>
                 <plugin>
@@ -94,6 +130,70 @@
     </build>
 
     <profiles>
+        <profile>
+            <id>release</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.sonatype.central</groupId>
+                        <artifactId>central-publishing-maven-plugin</artifactId>
+                        <version>0.12.0</version>
+                        <extensions>true</extensions>
+                        <configuration>
+                            <publishingServerId>central</publishingServerId>
+                            <autoPublish>true</autoPublish>
+                            <waitUntil>published</waitUntil>
+                        </configuration>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-source-plugin</artifactId>
+                        <version>3.3.1</version>
+                        <executions>
+                            <execution>
+                                <id>attach-sources</id>
+                                <goals>
+                                    <goal>jar-no-fork</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-javadoc-plugin</artifactId>
+                        <version>3.12.0</version>
+                        <executions>
+                            <execution>
+                                <id>attach-javadocs</id>
+                                <goals>
+                                    <goal>jar</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-gpg-plugin</artifactId>
+                        <version>3.2.8</version>
+                        <executions>
+                            <execution>
+                                <id>sign-artifacts</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>sign</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                        <configuration>
+                            <gpgArguments>
+                                <arg>--pinentry-mode</arg>
+                                <arg>loopback</arg>
+                            </gpgArguments>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
         <profile>
             <id>docs</id>
             <activation>

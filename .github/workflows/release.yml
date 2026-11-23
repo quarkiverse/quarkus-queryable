@@ -1,0 +1,74 @@
+name: Publish to Maven Central
+
+on:
+  push:
+    tags:
+      - '*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Publish release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Java and Maven Central credentials
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: maven
+          server-id: central
+          server-username: NEXUS_USERNAME
+          server-password: NEXUS_PASSWORD
+          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg-passphrase: MAVEN_GPG_PASSPHRASE
+
+      - name: Validate release version
+        shell: bash
+        run: |
+          if [[ ! "$GITHUB_REF_NAME" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Release tags must use stable semantic versions such as 4.0.0."
+            exit 1
+          fi
+          project_version="$(mvn -q -DforceStdout help:evaluate -Dexpression=project.version)"
+          if [[ "$project_version" != "$GITHUB_REF_NAME" ]]; then
+            echo "Tag $GITHUB_REF_NAME does not match project version $project_version."
+            exit 1
+          fi
+
+      - name: Validate Maven Central credentials
+        shell: bash
+        env:
+          NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
+          NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          if [[ -z "$NEXUS_USERNAME" || -z "$NEXUS_PASSWORD" || -z "$GPG_PRIVATE_KEY" || -z "$MAVEN_GPG_PASSPHRASE" ]]; then
+            echo "Set NEXUS_USERNAME, NEXUS_PASSWORD, GPG_PRIVATE_KEY, and GPG_PASSPHRASE repository secrets."
+            exit 1
+          fi
+
+      - name: Build and test extension
+        run: mvn -B -ntp clean install
+
+      - name: Test standalone consumer
+        run: mvn -B -ntp -f consumer-tests/pom.xml -Dqueryable.version="$GITHUB_REF_NAME" clean test
+
+      - name: Publish signed artifacts to Maven Central
+        run: mvn -B -ntp -Prelease -DperformRelease=true deploy
+        env:
+          NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
+          NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes --title "$GITHUB_REF_NAME" --latest

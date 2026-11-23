@@ -3,9 +3,9 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>io.quarkiverse.queryable</groupId>
+        <groupId>dev.queryable</groupId>
         <artifactId>quarkus-queryable-parent</artifactId>
-        <version>4.0.0-SNAPSHOT</version>
+        <version>4.0.0</version>
     </parent>
     <artifactId>quarkus-queryable</artifactId>
     <name>Quarkus Queryable - Runtime</name>

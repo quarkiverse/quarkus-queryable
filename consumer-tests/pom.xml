@@ -10,7 +10,7 @@
     <properties>
         <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <queryable.version>4.0.0-SNAPSHOT</queryable.version>
+        <queryable.version>4.0.0</queryable.version>
         <quarkus.version>3.39.5</quarkus.version>
     </properties>
 
@@ -28,7 +28,7 @@
 
     <dependencies>
         <dependency>
-            <groupId>io.quarkiverse.queryable</groupId>
+            <groupId>dev.queryable</groupId>
             <artifactId>quarkus-queryable</artifactId>
             <version>${queryable.version}</version>
         </dependency>

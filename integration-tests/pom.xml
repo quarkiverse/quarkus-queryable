@@ -4,16 +4,16 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <parent>
-        <groupId>io.quarkiverse.queryable</groupId>
+        <groupId>dev.queryable</groupId>
         <artifactId>quarkus-queryable-parent</artifactId>
-        <version>4.0.0-SNAPSHOT</version>
+        <version>4.0.0</version>
     </parent>
     <artifactId>quarkus-queryable-integration-tests</artifactId>
     <name>Quarkus Queryable - Integration tests</name>
 
     <dependencies>
         <dependency>
-            <groupId>io.quarkiverse.queryable</groupId>
+            <groupId>dev.queryable</groupId>
             <artifactId>quarkus-queryable</artifactId>
             <version>${project.version}</version>
         </dependency>

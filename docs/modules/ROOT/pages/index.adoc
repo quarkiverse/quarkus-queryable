@@ -12,7 +12,7 @@ counting, OpenAPI and transactions remain owned by the official
 [source,xml,subs=attributes+]
 ----
 <dependency>
-    <groupId>io.quarkiverse.queryable</groupId>
+    <groupId>dev.queryable</groupId>
     <artifactId>quarkus-queryable</artifactId>
     <version>{project-version}</version>
 </dependency>
