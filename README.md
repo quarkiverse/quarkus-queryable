@@ -151,10 +151,10 @@ mvn -f consumer-tests/pom.xml test
 
 Pushing a stable version tag matching the version in `pom.xml` triggers the
 Maven Central release workflow. It uploads the signed artifacts and returns
-without waiting for publication. A separate workflow verifies that the parent,
-runtime, and deployment artifacts are available on Maven Central before
-creating the GitHub release; it can also be run manually with a version.
-If verification fails, check the deployment in the Central Portal.
+without waiting for publication. Run the separate **Verify Maven Central
+release** workflow manually with a version to check the parent, runtime, and
+deployment artifacts. It checks once and fails if any artifact is unavailable;
+if it fails, check the deployment in the Central Portal and run it again later.
 Configure these repository Actions secrets before publishing: `NEXUS_USERNAME`,
 `NEXUS_PASSWORD`, `GPG_PRIVATE_KEY`, and `GPG_PASSPHRASE`.
 

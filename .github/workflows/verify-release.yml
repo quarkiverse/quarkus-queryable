@@ -1,9 +1,6 @@
 name: Verify Maven Central release
 
 on:
-  workflow_run:
-    workflows: ["Publish to Maven Central"]
-    types: [completed]
   workflow_dispatch:
     inputs:
       version:
@@ -12,18 +9,17 @@ on:
         type: string
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   verify:
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 5
     steps:
       - name: Verify published artifacts
         shell: bash
         env:
-          VERSION: ${{ inputs.version || github.event.workflow_run.head_branch }}
+          VERSION: ${{ inputs.version }}
         run: |
           if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "Invalid release version: $VERSION"
@@ -43,33 +39,15 @@ jobs:
             "quarkus-queryable-deployment/$VERSION/quarkus-queryable-deployment-$VERSION-javadoc.jar"
           )
 
-          for attempt in {1..30}; do
-            missing=0
-            for artifact in "${artifacts[@]}"; do
-              if ! curl --silent --show-error --fail --head --max-time 15 "$base/$artifact" >/dev/null; then
-                echo "Not available: $artifact"
-                missing=1
-              fi
-            done
-            if [[ "$missing" == 0 ]]; then
-              echo "All release artifacts are available on Maven Central."
-              exit 0
-            fi
-            if [[ "$attempt" -lt 30 ]]; then
-              sleep 30
+          missing=0
+          for artifact in "${artifacts[@]}"; do
+            if ! curl --silent --show-error --fail --head --max-time 15 "$base/$artifact" >/dev/null; then
+              echo "Not available: $artifact"
+              missing=1
             fi
           done
-          echo "Release artifacts did not become available. Check the Central Portal deployment."
-          exit 1
-
-      - name: Create GitHub release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          VERSION: ${{ inputs.version || github.event.workflow_run.head_branch }}
-        run: |
-          if gh release view "$VERSION" >/dev/null; then
-            echo "GitHub release $VERSION already exists."
-          else
-            gh release create "$VERSION" --verify-tag --generate-notes --title "$VERSION"
+          if [[ "$missing" != 0 ]]; then
+            echo "Release artifacts are not available. Check the Central Portal deployment."
+            exit 1
           fi
+          echo "All release artifacts are available on Maven Central."
