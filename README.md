@@ -113,6 +113,8 @@ implementation 'io.quarkiverse.queryable:quarkus-queryable:4.0.3'
 
 - [Getting started](docs/modules/ROOT/pages/index.adoc)
 - [Query filters](docs/modules/ROOT/pages/filters.adoc)
+- [Custom Criteria filters](docs/modules/ROOT/pages/custom-filters.adoc)
+- [Hibernate filters and SQL subqueries](docs/modules/ROOT/pages/hibernate-filters.adoc)
 - [REST lifecycle](docs/modules/ROOT/pages/lifecycle.adoc)
 - [Security](docs/modules/ROOT/pages/security.adoc)
 - [Testing](docs/modules/ROOT/pages/testing.adoc)
