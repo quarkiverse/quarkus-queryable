@@ -29,7 +29,12 @@ public class Developer extends PanacheEntityBase {
     public Long id;
 
     @QLike
+    @QRLike
+    @QLLike
     public String surname;
+
+    @Q
+    public Integer experienceYears;
 
     @QList
     public String team_uuid;
@@ -40,6 +45,9 @@ The generated collection endpoint accepts filters such as:
 
 ```text
 GET /api/developers?like.surname=pi
+GET /api/developers?rlike.surname=pi
+GET /api/developers?llike.surname=zza
+GET /api/developers?gte.experienceYears=3&lt.experienceYears=10
 GET /api/developers?obj.team_uuid=<uuid>
 ```
 
@@ -99,14 +107,6 @@ Applications must also include a JDBC driver and a JSON extension, for example:
 implementation 'io.quarkiverse.queryable:quarkus-queryable:3.0.0'
 ```
 
-## Features
-
-- Annotation-driven filters, sorting and logical deletion.
-- Hibernate filter integration with `@QFilter`.
-- Custom filters through `QueryableFilter<T>` and the Criteria API.
-- REST lifecycle callbacks through `QueryableRsListener<T>`.
-- Standard Quarkus security configuration.
-
 ## Documentation
 
 - [Getting started](https://quarkiverse.github.io/quarkiverse-docs/quarkus-queryable/dev/index.html)
@@ -114,6 +114,16 @@ implementation 'io.quarkiverse.queryable:quarkus-queryable:3.0.0'
 - [REST lifecycle](https://quarkiverse.github.io/quarkiverse-docs/quarkus-queryable/dev/lifecycle.html)
 - [Security](https://quarkiverse.github.io/quarkiverse-docs/quarkus-queryable/dev/security.html)
 - [Testing](https://quarkiverse.github.io/quarkiverse-docs/quarkus-queryable/dev/testing.html)
+
+## Features
+
+- Annotation-driven filters, sorting and logical deletion.
+- Equality, inequality and inclusive or exclusive range filters with `@Q`.
+- Case-insensitive substring, starts-with and ends-with filters.
+- Hibernate filter integration with `@QFilter`.
+- Custom filters through `QueryableFilter<T>` and the Criteria API.
+- REST lifecycle callbacks through `QueryableRsListener<T>`.
+- Standard Quarkus security configuration.
 
 ## Building from source
 
