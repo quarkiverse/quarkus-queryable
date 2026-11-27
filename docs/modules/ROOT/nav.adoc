@@ -1,5 +1,7 @@
 * xref:index.adoc[Getting started]
 * xref:filters.adoc[Query filters]
+* xref:custom-filters.adoc[Custom Criteria filters]
+* xref:hibernate-filters.adoc[Hibernate filters and SQL subqueries]
 * xref:lifecycle.adoc[REST lifecycle]
 * xref:security.adoc[Security]
 * xref:testing.adoc[Testing real applications]

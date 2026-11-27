@@ -72,5 +72,6 @@ REST Data Panache owns these operations:
 Queryable replaces only the collection `GET` so it can support the established
 Queryable parameter language.
 
-See xref:filters.adoc[Query filters], xref:lifecycle.adoc[REST lifecycle] and
-xref:security.adoc[Security].
+See xref:filters.adoc[Query filters], xref:custom-filters.adoc[Custom Criteria
+filters], xref:hibernate-filters.adoc[Hibernate filters and SQL subqueries],
+xref:lifecycle.adoc[REST lifecycle] and xref:security.adoc[Security].
