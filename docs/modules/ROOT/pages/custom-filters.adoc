@@ -1,0 +1,54 @@
+= Custom Criteria filters
+
+Implement `QueryableFilter<T>` as a CDI bean to contribute Jakarta Persistence
+Criteria API predicates to a generated collection endpoint.
+
+[source,java]
+----
+@ApplicationScoped
+public class DeveloperFilter implements QueryableFilter<Developer> {
+    @Override
+    public void contribute(QueryableFilterContext<Developer> context) {
+        String team = context.param("team.code");
+        if (team != null) {
+            context.add(context.criteriaBuilder().equal(
+                    context.root().get("team").get("code"), team));
+        }
+    }
+}
+----
+
+`GET /developers?team.code=backend` applies the custom predicate together with
+the other collection filters. The context provides a JPA `CriteriaBuilder`, the
+entity `Root`, and request parameters via `param` and `params`. Predicates added
+with `add` are combined with the other conditions using AND.
+
+Queryable invokes the contributor separately for the collection query and its
+filtered `listSize` count. The separate REST Data Panache `/count` endpoint and
+other CRUD operations are not filtered. Do not rely on an optional query filter
+for authorization.
+
+== OR alternatives
+
+Custom filters can opt in to the same OR group as built-in filters:
+
+[source,java]
+----
+for (String city : context.orParams("address.city")) {
+    context.addOr(context.criteriaBuilder().equal(
+            context.root().get("address").get("city"), city));
+}
+----
+
+`orParams("address.city")` reads all occurrences of `or.address.city` and
+marks the parameter as handled. The contributor is responsible for validating
+its values and adding predicates; return a REST error for invalid values.
+Custom parameters are not automatically listed in generated OpenAPI.
+
+The entity type is inferred from `QueryableFilter<Developer>`, including when
+it is declared on a generic superclass. Existing implementations that override
+`entityType()` remain supported.
+
+The context does not expose the enclosing Criteria query, so it cannot create
+Criteria subqueries directly. For application-defined SQL conditions and
+subqueries, see xref:hibernate-filters.adoc[Hibernate filters].
