@@ -114,6 +114,8 @@ implementation 'io.quarkiverse.queryable:quarkus-queryable:3.0.0'
 
 - [Getting started](https://quarkiverse.github.io/quarkiverse-docs/quarkus-queryable/dev/index.html)
 - [Query filters](https://quarkiverse.github.io/quarkiverse-docs/quarkus-queryable/dev/filters.html)
+- [Custom Criteria filters](docs/modules/ROOT/pages/custom-filters.adoc)
+- [Hibernate filters and SQL subqueries](docs/modules/ROOT/pages/hibernate-filters.adoc)
 - [REST lifecycle](https://quarkiverse.github.io/quarkiverse-docs/quarkus-queryable/dev/lifecycle.html)
 - [Security](https://quarkiverse.github.io/quarkiverse-docs/quarkus-queryable/dev/security.html)
 - [Testing](https://quarkiverse.github.io/quarkiverse-docs/quarkus-queryable/dev/testing.html)

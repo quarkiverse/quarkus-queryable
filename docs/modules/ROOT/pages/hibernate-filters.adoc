@@ -1,0 +1,49 @@
+= Hibernate filters and SQL subqueries
+
+Use `@QFilter` on an entity to connect a REST query parameter to an existing
+Hibernate `@FilterDef` and `@Filter`. Hibernate owns the SQL condition and
+alias handling; Queryable does not generate or modify those annotations.
+
+[source,java]
+----
+@Entity
+@Table(name = "contracts")
+@QRs("/contracts")
+@FilterDef(name = "Contract.obj.coordinator_id",
+    parameters = @ParamDef(name = "coordinator_id", type = BigDecimal.class))
+@Filter(name = "Contract.obj.coordinator_id",
+    condition = "exists (select 1 from contract_coordinators coordinator " +
+        "where coordinator.contract_uuid = {contract}.uuid " +
+        "and coordinator.coordinator_id = :coordinator_id and coordinator.active = 1)",
+    deduceAliasInjectionPoints = false,
+    aliases = @SqlFragmentAlias(alias = "contract", table = "contracts"))
+@QFilter(name = "Contract.obj.coordinator_id",
+    queryParam = "obj.coordinator_id",
+    filterParam = "coordinator_id")
+public class Contract extends PanacheEntityBase {
+    // Entity fields and identifier
+}
+----
+
+`GET /contracts?obj.coordinator_id=123` activates the filter on the generated
+collection endpoint. The parameter type comes from Hibernate's filter
+definition, so the value is converted to `BigDecimal`. Invalid values return
+HTTP 400. Without the query parameter, Queryable does not activate the filter.
+
+`@QFilter` is repeatable. For a Hibernate filter with multiple parameters, add
+one `@QFilter` per parameter using the same filter name. When any of these
+parameters is supplied, all parameters without Hibernate resolvers are
+required; missing parameters return HTTP 400. A filter already enabled on the
+same Hibernate session is not overwritten or disabled by Queryable: a request
+trying to activate it fails instead.
+
+Queryable applies the filter independently while executing the collection
+query and the query that computes its `listSize` header, and disables it in
+both success and failure cases. It does not apply the filter to the separate
+REST Data Panache `/count` endpoint or other CRUD operations. Hibernate filter
+conditions are application-defined SQL, not REST input; use named parameters
+for values and do not treat an optional query filter as authorization.
+
+For parameterless Hibernate filters, see the query options in
+xref:filters.adoc[Query filters].
+For custom JPA Criteria predicates, see xref:custom-filters.adoc[Custom Criteria filters].
