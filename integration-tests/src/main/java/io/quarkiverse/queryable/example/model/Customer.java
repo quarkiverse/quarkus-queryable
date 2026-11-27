@@ -14,11 +14,13 @@ import org.hibernate.annotations.SqlFragmentAlias;
 
 import io.quarkiverse.queryable.runtime.Q;
 import io.quarkiverse.queryable.runtime.QFilter;
+import io.quarkiverse.queryable.runtime.QLLike;
 import io.quarkiverse.queryable.runtime.QLike;
 import io.quarkiverse.queryable.runtime.QList;
 import io.quarkiverse.queryable.runtime.QLogicalDelete;
 import io.quarkiverse.queryable.runtime.QNil;
 import io.quarkiverse.queryable.runtime.QNotNil;
+import io.quarkiverse.queryable.runtime.QRLike;
 import io.quarkiverse.queryable.runtime.QRs;
 import io.quarkus.hibernate.orm.panache.PanacheEntity;
 
@@ -39,6 +41,8 @@ public class Customer extends PanacheEntity {
 
     @Q
     @QLike
+    @QRLike
+    @QLLike
     public String name;
 
     @Q(name = "externalCode")
