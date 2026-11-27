@@ -88,8 +88,8 @@ class QueryableResourceTest {
                 .body("$", hasSize(1))
                 .body("[0].name", equalTo("Mario Rossi"));
 
-        authenticated().queryParam("from.createdOn", "2026-02-12")
-                .queryParam("to.createdOn", "2026-02-12")
+        authenticated().queryParam("efrom.createdOn", "2026-02-12")
+                .queryParam("eto.createdOn", "2026-02-12")
                 .get("/api/v1/customers").then().statusCode(200)
                 .body("$", hasSize(1))
                 .body("[0].externalCode", equalTo("FR-002"));
@@ -139,7 +139,7 @@ class QueryableResourceTest {
                 .get("/api/v1/customers").then().statusCode(200)
                 .body("$", hasSize(2))
                 .header("listSize", "2");
-        authenticated().queryParam("or.to.createdOn", "2026-01-10")
+        authenticated().queryParam("or.eto.createdOn", "2026-01-10")
                 .queryParam("or.nil.notes", "")
                 .get("/api/v1/customers").then().statusCode(200)
                 .body("$", hasSize(2));
@@ -183,18 +183,18 @@ class QueryableResourceTest {
         int next = createClassFilterSample("next", "other", "2026-03-11T00:00:00Z", true);
         int inactive = createClassFilterSample("hidden", "hidden", "2026-03-10T12:00:00Z", false);
         try {
-            given().queryParam("from.createdAt", "2026-03-10")
-                    .queryParam("to.createdAt", "2026-03-10")
+            given().queryParam("efrom.createdAt", "2026-03-10")
+                    .queryParam("eto.createdAt", "2026-03-10")
                     .get("/api/class-filters").then().statusCode(200)
                     .body("$", hasSize(2)).header("listSize", "2");
-            given().queryParam("from.createdAt", "2026-03-10T23:59:59.999Z")
-                    .queryParam("to.createdAt", "2026-03-11T01:00:00+01:00")
+            given().queryParam("efrom.createdAt", "2026-03-10T23:59:59.999Z")
+                    .queryParam("eto.createdAt", "2026-03-11T01:00:00+01:00")
                     .get("/api/class-filters").then().statusCode(200)
                     .body("$", hasSize(2));
             given().queryParam("obj.createdAt", "10/03/2026 00:00")
                     .get("/api/class-filters").then().statusCode(200)
                     .body("$", hasSize(1)).body("[0].name", equalTo("early"));
-            given().queryParam("or.from.createdAt", "2026-03-11")
+            given().queryParam("or.efrom.createdAt", "2026-03-11")
                     .queryParam("or.obj.name", "early")
                     .get("/api/class-filters").then().statusCode(200)
                     .body("$", hasSize(2));
@@ -235,10 +235,116 @@ class QueryableResourceTest {
         }
     }
 
+    @Test
+    void supportsComparisonAliasesNegationAndDirectionalLike() {
+        for (String prefix : new String[] { "from", "gt" }) {
+            authenticated().queryParam(prefix + ".createdOn", "2026-01-10")
+                    .get("/api/v1/customers").then().statusCode(200)
+                    .body("$", hasSize(1)).body("[0].externalCode", equalTo("FR-002"));
+        }
+        for (String prefix : new String[] { "efrom", "gte" }) {
+            authenticated().queryParam(prefix + ".createdOn", "2026-01-10")
+                    .get("/api/v1/customers").then().statusCode(200).body("$", hasSize(2));
+        }
+        for (String prefix : new String[] { "to", "lt" }) {
+            authenticated().queryParam(prefix + ".createdOn", "2026-02-12")
+                    .get("/api/v1/customers").then().statusCode(200)
+                    .body("$", hasSize(1)).body("[0].externalCode", equalTo("IT-001"));
+        }
+        for (String prefix : new String[] { "eto", "lte" }) {
+            authenticated().queryParam(prefix + ".createdOn", "2026-02-12")
+                    .get("/api/v1/customers").then().statusCode(200).body("$", hasSize(2));
+        }
+        authenticated().queryParam("not.externalCode", "IT-001")
+                .get("/api/v1/customers").then().statusCode(200)
+                .body("$", hasSize(1)).body("[0].externalCode", equalTo("FR-002"));
+        authenticated().queryParam("rlike.name", "mArIo r")
+                .get("/api/v1/customers").then().statusCode(200)
+                .body("$", hasSize(1)).body("[0].externalCode", equalTo("IT-001"));
+        authenticated().queryParam("llike.name", "BIANCHI")
+                .get("/api/v1/customers").then().statusCode(200)
+                .body("$", hasSize(1)).body("[0].externalCode", equalTo("FR-002"));
+        authenticated().queryParam("or.rlike.name", "mario r")
+                .queryParam("or.lt.createdOn", "2026-01-10")
+                .get("/api/v1/customers").then().statusCode(200).body("$", hasSize(1));
+        authenticated().queryParam("from.createdOn", "2026-01-10")
+                .queryParam("gt.createdOn", "2026-01-10")
+                .get("/api/v1/customers").then().statusCode(400);
+        authenticated().queryParam("or.efrom.createdOn", "2026-01-10")
+                .queryParam("gte.createdOn", "2026-01-10")
+                .get("/api/v1/customers").then().statusCode(400);
+        authenticated().queryParam("or.eto.createdOn", "2026-01-10")
+                .queryParam("or.lte.createdOn", "2026-02-12")
+                .get("/api/v1/customers").then().statusCode(400);
+    }
+
+    @Test
+    void supportsNegatedLikeAndEmptyStringChecks() {
+        int alpha = createClassFilterSample("alpha", "Alpha", "2026-03-10T00:00:00Z", true);
+        int beta = createClassFilterSample("beta", "bEtA", "2026-03-10T00:00:00Z", true);
+        int empty = createClassFilterSample("empty", "", "2026-03-10T00:00:00Z", true);
+        int nullTitle = given().contentType(ContentType.JSON)
+                .body("""
+                        {"name":"null","title":null,"createdAt":"2026-03-10T00:00:00Z","active":true}
+                        """)
+                .post("/api/class-filters").then().statusCode(201).extract().path("id");
+        try {
+            given().queryParam("find.label", "ALP").get("/api/class-filters")
+                    .then().statusCode(200).body("$", hasSize(1)).body("[0].name", equalTo("alpha"));
+            given().queryParam("notlike.label", "aLp").get("/api/class-filters")
+                    .then().statusCode(200).body("$", hasSize(2))
+                    .body("name", hasItem("beta")).body("name", hasItem("empty"));
+            given().get("/api/class-filters?ie.label").then().statusCode(200)
+                    .body("$", hasSize(1)).body("[0].name", equalTo("empty"));
+            given().get("/api/class-filters?nie.label").then().statusCode(200)
+                    .body("$", hasSize(2)).body("name", hasItem("alpha")).body("name", hasItem("beta"));
+            given().queryParam("or.ie.label", "").queryParam("or.notlike.label", "ALP")
+                    .get("/api/class-filters").then().statusCode(200).body("$", hasSize(2));
+            given().queryParam("or.nie.label", "").queryParam("obj.name", "beta")
+                    .get("/api/class-filters").then().statusCode(200).body("$", hasSize(1));
+            given().queryParam("or.notlike.name", "a")
+                    .get("/api/options").then().statusCode(400);
+        } finally {
+            for (int id : new int[] { alpha, beta, empty, nullTitle }) {
+                given().delete("/api/class-filters/" + id).then().statusCode(204);
+            }
+        }
+    }
+
+    @Test
+    void appliesWholeDayBoundariesAndNegatedCollectionMembership() {
+        int first = createClassFilterSample("early", "first", "2026-03-10T00:00:00Z", true);
+        int last = createClassFilterSample("late", "last", "2026-03-10T23:59:59.999Z", true);
+        int next = createClassFilterSample("next", "other", "2026-03-11T00:00:00Z", true);
+        try {
+            given().queryParam("from.createdAt", "2026-03-10").get("/api/class-filters")
+                    .then().statusCode(200).body("$", hasSize(1)).body("[0].name", equalTo("next"));
+            given().queryParam("to.createdAt", "2026-03-10").get("/api/class-filters")
+                    .then().statusCode(200).body("$", hasSize(0));
+            given().queryParam("gte.createdAt", "2026-03-10").queryParam("lte.createdAt", "2026-03-10")
+                    .get("/api/class-filters").then().statusCode(200).body("$", hasSize(2));
+            given().queryParam("not.tags", "missing").get("/api/class-filters")
+                    .then().statusCode(200).body("$", hasSize(3));
+            given().queryParam("starts.label", "FiR").queryParam("not.label", "last")
+                    .get("/api/class-filters").then().statusCode(200)
+                    .body("$", hasSize(1)).body("[0].name", equalTo("early"));
+            given().queryParam("gt.id", "not-a-number").get("/api/class-filters")
+                    .then().statusCode(400);
+            given().queryParam("obj.extra9", "indexed").get("/api/class-filters")
+                    .then().statusCode(200).body("$", hasSize(3));
+            given().queryParam("or.not.tags", "java").queryParam("or.obj.name", "next")
+                    .get("/api/class-filters").then().statusCode(200).body("$", hasSize(1));
+        } finally {
+            for (int id : new int[] { first, last, next }) {
+                given().delete("/api/class-filters/" + id).then().statusCode(204);
+            }
+        }
+    }
+
     private int createClassFilterSample(String name, String title, String date, boolean active) {
         return given().contentType(ContentType.JSON)
                 .body("""
-                        {"name":"%s","title":"%s","createdAt":"%s",
+                        {"name":"%s","title":"%s","createdAt":"%s","extra9":"indexed",
                          "tags":["java","quarkus"],"ratings":[7,9],"active":%s}
                         """.formatted(name, title, date, active))
                 .post("/api/class-filters").then().statusCode(201).extract().path("id");
@@ -471,6 +577,10 @@ class QueryableResourceTest {
         assertThat(document.getList("paths['/api/v1/customers'].get.parameters.name"), hasItem("or.like.name"));
         assertThat(document.getList("paths['/api/v1/customers'].get.parameters.name"), hasItem("or.obj.name"));
         assertThat(document.getList("paths['/api/v1/customers'].get.parameters.name"), hasItem("or.from.createdOn"));
+        assertThat(document.getList("paths['/api/v1/customers'].get.parameters.name"), hasItem("or.gte.createdOn"));
+        assertThat(document.getList("paths['/api/v1/customers'].get.parameters.name"), hasItem("not.name"));
+        assertThat(document.getList("paths['/api/v1/customers'].get.parameters.name"), hasItem("rlike.name"));
+        assertThat(document.getList("paths['/api/v1/customers'].get.parameters.name"), hasItem("or.llike.name"));
         assertThat(document.getList("paths['/api/v1/customers'].get.parameters.name"), not(hasItem("or.obj.active")));
         assertThat(document.getList("paths['/api/v1/customers'].get.parameters.name"),
                 not(hasItem("or.obj.coordinator_id")));
@@ -484,6 +594,12 @@ class QueryableResourceTest {
         assertThat(document.getList("paths['/api/class-filters'].get.parameters.name"), hasItem("obj.name"));
         assertThat(document.getList("paths['/api/class-filters'].get.parameters.name"), hasItem("obj.id"));
         assertThat(document.getList("paths['/api/class-filters'].get.parameters.name"), hasItem("exact.label"));
+        assertThat(document.getList("paths['/api/class-filters'].get.parameters.name"), hasItem("starts.label"));
+        assertThat(document.getList("paths['/api/class-filters'].get.parameters.name"), hasItem("or.lte.extra9"));
+        assertThat(document.getList("paths['/api/class-filters'].get.parameters.name"), hasItem("notlike.label"));
+        assertThat(document.getList("paths['/api/class-filters'].get.parameters.name"), hasItem("or.ie.label"));
+        assertThat(document.getList("paths['/api/class-filters'].get.parameters.name"), hasItem("nie.label"));
+        assertThat(document.getList("paths['/api/options'].get.parameters.name"), not(hasItem("notlike.name")));
         assertThat(document.getList("paths['/api/class-filters'].get.parameters.name"), hasItem("from.createdAt"));
         assertThat(document.getList("paths['/api/class-filters'].get.parameters.name"), hasItem("or.obj.tags"));
         assertThat(document.getList("paths['/api/class-filters'].get.parameters.name"), not(hasItem("from.tags")));

@@ -21,6 +21,7 @@ import jakarta.ws.rs.core.UriInfo;
 
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget;
+import org.jboss.jandex.AnnotationValue;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.FieldInfo;
@@ -37,6 +38,7 @@ import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveMethodBuildItem;
+import io.quarkus.gizmo.AnnotationCreator;
 import io.quarkus.gizmo.ClassCreator;
 import io.quarkus.gizmo.ClassOutput;
 import io.quarkus.gizmo.MethodCreator;
@@ -56,6 +58,8 @@ class QueryableProcessor {
     private static final DotName QRS = DotName.createSimple("io.quarkiverse.queryable.runtime.QRs");
     private static final DotName Q = DotName.createSimple("io.quarkiverse.queryable.runtime.Q");
     private static final DotName Q_LIKE = DotName.createSimple("io.quarkiverse.queryable.runtime.QLike");
+    private static final DotName Q_R_LIKE = DotName.createSimple("io.quarkiverse.queryable.runtime.QRLike");
+    private static final DotName Q_L_LIKE = DotName.createSimple("io.quarkiverse.queryable.runtime.QLLike");
     private static final DotName Q_LIST = DotName.createSimple("io.quarkiverse.queryable.runtime.QList");
     private static final DotName Q_LIKE_LIST = DotName.createSimple("io.quarkiverse.queryable.runtime.QLikeList");
     private static final DotName Q_NIL = DotName.createSimple("io.quarkiverse.queryable.runtime.QNil");
@@ -66,6 +70,8 @@ class QueryableProcessor {
     private static final DotName Q_FILTERS = DotName.createSimple("io.quarkiverse.queryable.runtime.QFilter$List");
     private static final DotName ELEMENT_COLLECTION = DotName.createSimple("jakarta.persistence.ElementCollection");
     private static final DotName TRANSIENT = DotName.createSimple("jakarta.persistence.Transient");
+    private static final List<String> COMPARISON_PREFIXES = List.of("from", "gt", "efrom", "gte",
+            "to", "lt", "eto", "lte");
     private static final List<DotName> CALLBACK_ANNOTATIONS = List.of(
             DotName.createSimple("io.quarkiverse.queryable.runtime.PreFetch"),
             DotName.createSimple("io.quarkiverse.queryable.runtime.PostFetch"),
@@ -224,9 +230,6 @@ class QueryableProcessor {
         addParameter(parameterTypes, names, defaults, "startRow", String.class, "0");
         addParameter(parameterTypes, names, defaults, "pageSize", String.class, "10");
         addParameter(parameterTypes, names, defaults, "orderBy", String.class, null);
-        for (String queryParameter : queryParameters) {
-            addParameter(parameterTypes, names, defaults, queryParameter, String.class, null);
-        }
         parameterTypes.add(UriInfo.class);
         names.add("uriInfo");
         defaults.add(null);
@@ -234,6 +237,17 @@ class QueryableProcessor {
         MethodCreator method = creator.getMethodCreator(
                 "list", Response.class, parameterTypes.toArray(Class<?>[]::new));
         method.addAnnotation(GET.class);
+        AnnotationCreator[] documentedParameters = queryParameters.stream()
+                .map(name -> AnnotationCreator.of("org.eclipse.microprofile.openapi.annotations.parameters.Parameter")
+                        .add("name", name)
+                        .add("in", AnnotationValue.createEnumValue("in",
+                                DotName.createSimple("org.eclipse.microprofile.openapi.annotations.enums.ParameterIn"),
+                                "QUERY"))
+                        .add("schema", AnnotationCreator.of("org.eclipse.microprofile.openapi.annotations.media.Schema")
+                                .add("implementation", String.class)))
+                .toArray(AnnotationCreator[]::new);
+        method.addAnnotation("org.eclipse.microprofile.openapi.annotations.parameters.Parameters")
+                .addValue("value", documentedParameters);
         for (int index = 0; index < names.size(); index++) {
             if ("uriInfo".equals(names.get(index))) {
                 method.getParameterAnnotations(index).addAnnotation(Context.class);
@@ -286,12 +300,18 @@ class QueryableProcessor {
             if (equal != null && executeAlways(equal)) {
                 protectedParameters.add(parameterName(field, equal, "obj", true));
                 String name = fieldName(field, equal);
-                protectedParameters.add("from." + name);
-                protectedParameters.add("to." + name);
+                protectedParameters.add("not." + name);
+                for (String operator : COMPARISON_PREFIXES) {
+                    protectedParameters.add(operator + "." + name);
+                }
             }
             AnnotationInstance like = field.annotation(Q_LIKE);
             if (like != null && executeAlways(like)) {
                 protectedParameters.add(parameterName(field, like, "like", false));
+                String name = fieldName(field, like);
+                protectedParameters.add("notlike." + name);
+                protectedParameters.add("ie." + name);
+                protectedParameters.add("nie." + name);
             }
         }
         for (FieldInfo field : fields) {
@@ -304,16 +324,28 @@ class QueryableProcessor {
                 addParameter(result, field, Q, "obj", protectedParameters);
             }
             addParameter(result, field, Q_LIKE, "like", protectedParameters);
+            AnnotationInstance like = field.annotation(Q_LIKE);
+            if (like != null && !executeAlways(like)) {
+                String name = fieldName(field, like);
+                addQueryParameter(result, "notlike." + name, protectedParameters);
+                addQueryParameter(result, "ie." + name, protectedParameters);
+                addQueryParameter(result, "nie." + name, protectedParameters);
+            }
+            addParameter(result, field, Q_R_LIKE, "rlike", protectedParameters);
+            addParameter(result, field, Q_L_LIKE, "llike", protectedParameters);
             addParameter(result, field, Q_LIST, "obj", protectedParameters);
             addParameter(result, field, Q_LIKE_LIST, "like", protectedParameters);
             addParameter(result, field, Q_NIL, "nil", protectedParameters);
             addParameter(result, field, Q_NOT_NIL, "notNil", protectedParameters);
             addParameter(result, field, Q_LOGICAL_DELETE, "obj", protectedParameters);
-            if (!field.hasAnnotation(ELEMENT_COLLECTION)
-                    && (automatic || field.hasAnnotation(Q) && !executeAlways(field.annotation(Q)))) {
+            if (automatic || field.hasAnnotation(Q) && !executeAlways(field.annotation(Q))) {
                 String name = automatic ? field.name() : fieldName(field, field.annotation(Q));
-                addQueryParameter(result, "from." + name, protectedParameters);
-                addQueryParameter(result, "to." + name, protectedParameters);
+                addQueryParameter(result, "not." + name, protectedParameters);
+                if (!field.hasAnnotation(ELEMENT_COLLECTION)) {
+                    for (String operator : COMPARISON_PREFIXES) {
+                        addQueryParameter(result, operator + "." + name, protectedParameters);
+                    }
+                }
             }
         }
         return List.copyOf(result);

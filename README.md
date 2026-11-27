@@ -28,7 +28,12 @@ public class Developer extends PanacheEntityBase {
     public Long id;
 
     @QLike
+    @QRLike
+    @QLLike
     public String surname;
+
+    @Q
+    public Integer experienceYears;
 
     @QList
     public String team_uuid;
@@ -39,6 +44,12 @@ The generated collection endpoint accepts filters such as:
 
 ```text
 GET /api/developers?like.surname=pi
+GET /api/developers?notlike.surname=pi
+GET /api/developers?ie.surname
+GET /api/developers?nie.surname
+GET /api/developers?rlike.surname=pi
+GET /api/developers?llike.surname=zza
+GET /api/developers?gte.experienceYears=3&lt.experienceYears=10
 GET /api/developers?obj.team_uuid=<uuid>
 ```
 
@@ -53,6 +64,9 @@ GET    /api/developers/count
 ```
 
 ## Installation
+
+> These Quarkiverse coordinates are not published yet. The version below is the
+> current development version; compatibility with Quarkus 4 is not yet verified.
 
 ### Quarkus CLI
 
@@ -95,14 +109,6 @@ Applications must also include a JDBC driver and a JSON extension, for example:
 implementation 'io.quarkiverse.queryable:quarkus-queryable:4.0.3'
 ```
 
-## Features
-
-- Annotation-driven filters, sorting and logical deletion.
-- Hibernate filter integration with `@QFilter`.
-- Custom filters through `QueryableFilter<T>` and the Criteria API.
-- REST lifecycle callbacks through `QueryableRsListener<T>`.
-- Standard Quarkus security configuration.
-
 ## Documentation
 
 - [Getting started](docs/modules/ROOT/pages/index.adoc)
@@ -110,6 +116,17 @@ implementation 'io.quarkiverse.queryable:quarkus-queryable:4.0.3'
 - [REST lifecycle](docs/modules/ROOT/pages/lifecycle.adoc)
 - [Security](docs/modules/ROOT/pages/security.adoc)
 - [Testing](docs/modules/ROOT/pages/testing.adoc)
+
+## Features
+
+- Annotation-driven filters, sorting and logical deletion.
+- Equality, inequality and inclusive or exclusive range filters with `@Q`.
+- Case-insensitive substring, negated substring, starts-with and ends-with filters.
+- Empty and non-empty string checks with `@QLike`.
+- Hibernate filter integration with `@QFilter`.
+- Custom filters through `QueryableFilter<T>` and the Criteria API.
+- REST lifecycle callbacks through `QueryableRsListener<T>`.
+- Standard Quarkus security configuration.
 
 ## Building from source
 
