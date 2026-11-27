@@ -6,7 +6,7 @@
         <artifactId>quarkiverse-parent</artifactId>
         <version>26</version>
     </parent>
-    <groupId>dev.queryable</groupId>
+    <groupId>io.quarkiverse.queryable</groupId>
     <artifactId>quarkus-queryable-parent</artifactId>
     <version>4.0.3</version>
     <packaging>pom</packaging>
@@ -35,9 +35,9 @@
     </modules>
 
     <scm>
-        <connection>scm:git:git@github.com:queryabledev/quarkus-queryable.git</connection>
-        <developerConnection>scm:git:git@github.com:queryabledev/quarkus-queryable.git</developerConnection>
-        <url>https://github.com/queryabledev/quarkus-queryable</url>
+        <connection>scm:git:git@github.com:quarkiverse/quarkus-queryable.git</connection>
+        <developerConnection>scm:git:git@github.com:quarkiverse/quarkus-queryable.git</developerConnection>
+        <url>https://github.com/quarkiverse/quarkus-queryable</url>
         <tag>4.0.3</tag>
     </scm>
 
@@ -74,8 +74,8 @@
                         <configuration>
                             <rules>
                                 <requireMatchingCoordinates>
-                                    <groupIdPattern>dev\.queryable.*</groupIdPattern>
-                                    <message>Queryable artifacts must use the dev.queryable namespace.</message>
+                                    <groupIdPattern>io\.quarkiverse\.queryable.*</groupIdPattern>
+                                    <message>Queryable artifacts must use the io.quarkiverse.queryable namespace.</message>
                                 </requireMatchingCoordinates>
                             </rules>
                         </configuration>

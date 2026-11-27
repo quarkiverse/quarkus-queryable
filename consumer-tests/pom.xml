@@ -28,7 +28,7 @@
 
     <dependencies>
         <dependency>
-            <groupId>dev.queryable</groupId>
+            <groupId>io.quarkiverse.queryable</groupId>
             <artifactId>quarkus-queryable</artifactId>
             <version>${queryable.version}</version>
         </dependency>
