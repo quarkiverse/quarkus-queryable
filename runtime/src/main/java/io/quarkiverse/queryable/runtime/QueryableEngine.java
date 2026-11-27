@@ -60,6 +60,8 @@ import io.quarkiverse.queryable.runtime.spi.QueryableRsListenerMarker;
 public class QueryableEngine {
 
     private static final Logger LOG = Logger.getLogger(QueryableEngine.class);
+    private static final List<String> COMPARISON_PREFIXES = List.of("from", "gt", "efrom", "gte",
+            "to", "lt", "eto", "lte");
     private static final List<DateTimeFormatter> LEGACY_DATE_FORMATS = List.of(
             DateTimeFormatter.ISO_LOCAL_DATE_TIME,
             DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm", Locale.ROOT).withResolverStyle(ResolverStyle.STRICT),
@@ -233,12 +235,19 @@ public class QueryableEngine {
                         throw new IllegalStateException("EXECUTE_ALWAYS is not supported on collection field " + field);
                     }
                     rejectOr(parameters, equality, "EXECUTE_ALWAYS cannot be used in OR");
-                    rejectOr(parameters, "from." + name, "EXECUTE_ALWAYS cannot be used in OR");
-                    rejectOr(parameters, "to." + name, "EXECUTE_ALWAYS cannot be used in OR");
+                    rejectOr(parameters, "not." + name, "EXECUTE_ALWAYS cannot be used in OR");
+                    for (String operator : COMPARISON_PREFIXES) {
+                        rejectOr(parameters, operator + "." + name, "EXECUTE_ALWAYS cannot be used in OR");
+                    }
                     predicates.add(cb.equal(path(root, field.getName()), fixedValue(field, equal.condition())));
                 } else {
                     addEqualOrRange(field, prefix, name, cb, root, parameters, predicates);
-                    List<String> names = collection ? List.of(equality) : List.of(equality, "from." + name, "to." + name);
+                    List<String> names = new ArrayList<>(List.of(equality, "not." + name));
+                    if (!collection) {
+                        for (String operator : COMPARISON_PREFIXES) {
+                            names.add(operator + "." + name);
+                        }
+                    }
                     for (String nameToMatch : names) {
                         addOrValues(nameToMatch, parameters, handledOrParameters, alternatives,
                                 single -> {
@@ -259,6 +268,20 @@ public class QueryableEngine {
                     addOrValues(name, parameters, handledOrParameters, alternatives,
                             single -> addLike(field, name, cb, root, single, alternatives));
                 }
+            }
+            QRLike rightLike = field.getAnnotation(QRLike.class);
+            if (rightLike != null) {
+                String name = parameterName(rightLike.prefix(), rightLike.name(), field);
+                addDirectionalLike(field, name, true, cb, root, parameters, predicates);
+                addOrValues(name, parameters, handledOrParameters, alternatives,
+                        single -> addDirectionalLike(field, name, true, cb, root, single, alternatives));
+            }
+            QLLike leftLike = field.getAnnotation(QLLike.class);
+            if (leftLike != null) {
+                String name = parameterName(leftLike.prefix(), leftLike.name(), field);
+                addDirectionalLike(field, name, false, cb, root, parameters, predicates);
+                addOrValues(name, parameters, handledOrParameters, alternatives,
+                        single -> addDirectionalLike(field, name, false, cb, root, single, alternatives));
             }
             QList list = field.getAnnotation(QList.class);
             if (list != null) {
@@ -448,51 +471,90 @@ public class QueryableEngine {
         String name = alias == null || alias.isBlank() ? fieldName : alias;
         Class<?> type = field.getType();
         String equalValue = parameters.getFirst(prefix + "." + name);
-        String fromValue = parameters.getFirst("from." + name);
-        String toValue = parameters.getFirst("to." + name);
+        String notValue = parameters.getFirst("not." + name);
+        String fromValue = aliasValue(parameters, "from", "gt", name);
+        String efromValue = aliasValue(parameters, "efrom", "gte", name);
+        String toValue = aliasValue(parameters, "to", "lt", name);
+        String etoValue = aliasValue(parameters, "eto", "lte", name);
 
         if (field.isAnnotationPresent(ElementCollection.class)) {
             Attribute<?, ?> attribute = root.getModel().getAttribute(fieldName);
             if (!Collection.class.isAssignableFrom(type) || !(attribute instanceof PluralAttribute<?, ?, ?> plural)) {
                 throw new IllegalStateException("@Q requires a plural element collection: " + field);
             }
-            if (fromValue != null || toValue != null) {
+            if (fromValue != null || efromValue != null || toValue != null || etoValue != null) {
                 throw new BadRequestException("Ranges are not supported for collection " + name);
             }
-            if (equalValue != null) {
+            for (boolean negate : List.of(false, true)) {
+                String raw = negate ? notValue : equalValue;
+                if (raw == null) {
+                    continue;
+                }
                 Class<?> elementType = plural.getElementType().getJavaType();
                 Object value;
                 try {
                     if ((elementType == Boolean.class || elementType == boolean.class)
-                            && !equalValue.equalsIgnoreCase("true") && !equalValue.equalsIgnoreCase("false")) {
+                            && !raw.equalsIgnoreCase("true") && !raw.equalsIgnoreCase("false")) {
                         throw new IllegalArgumentException("Expected true or false");
                     }
-                    value = convertQueryValue(elementType, equalValue, false);
+                    value = convertQueryValue(elementType, raw, false);
                 } catch (IllegalArgumentException | DateTimeException exception) {
                     throw new BadRequestException("Invalid value for " + prefix + "." + name, exception);
                 }
                 Expression<Collection<Object>> collection = root.get(fieldName);
-                predicates.add(cb.isMember(value, collection));
+                predicates.add(negate ? cb.isNotMember(value, collection) : cb.isMember(value, collection));
             }
             return;
         }
         if (equalValue != null) {
             predicates.add(cb.equal(path(root, fieldName), convertQueryValue(type, equalValue, false)));
         }
-        if (fromValue != null) {
+        if (notValue != null) {
+            predicates.add(cb.notEqual(path(root, fieldName), convertQueryValue(type, notValue, false)));
+        }
+        if (fromValue != null || efromValue != null || toValue != null || etoValue != null) {
             if (!Comparable.class.isAssignableFrom(type)
                     && !type.isPrimitive()
                     && !type.equals(LocalDate.class)
                     && !type.equals(LocalDateTime.class)
                     && !type.equals(Instant.class)
                     && !type.equals(ZonedDateTime.class)) {
-                throw new IllegalArgumentException("from." + name + " requires a comparable field");
+                throw new BadRequestException("Ranges require a comparable field: " + name);
             }
+        }
+        if (fromValue != null) {
+            predicates.add(cb.greaterThan(path(root, fieldName), (Comparable) convertQueryValue(type, fromValue, true)));
+        }
+        if (efromValue != null) {
             predicates.add(
-                    cb.greaterThanOrEqualTo(path(root, fieldName), (Comparable) convertQueryValue(type, fromValue, false)));
+                    cb.greaterThanOrEqualTo(path(root, fieldName), (Comparable) convertQueryValue(type, efromValue, false)));
         }
         if (toValue != null) {
-            predicates.add(cb.lessThanOrEqualTo(path(root, fieldName), (Comparable) convertQueryValue(type, toValue, true)));
+            predicates.add(cb.lessThan(path(root, fieldName), (Comparable) convertQueryValue(type, toValue, false)));
+        }
+        if (etoValue != null) {
+            predicates.add(cb.lessThanOrEqualTo(path(root, fieldName), (Comparable) convertQueryValue(type, etoValue, true)));
+        }
+    }
+
+    private static String aliasValue(MultivaluedMap<String, String> parameters, String first, String second, String name) {
+        String firstName = first + "." + name;
+        String secondName = second + "." + name;
+        boolean hasFirst = parameters.containsKey(firstName) || parameters.containsKey("or." + firstName);
+        boolean hasSecond = parameters.containsKey(secondName) || parameters.containsKey("or." + secondName);
+        if (hasFirst && hasSecond) {
+            throw new BadRequestException("Use only one of " + firstName + " and " + secondName);
+        }
+        return parameters.containsKey(firstName) ? parameters.getFirst(firstName) : parameters.getFirst(secondName);
+    }
+
+    private <T> void addDirectionalLike(Field field, String name, boolean startsWith, CriteriaBuilder cb, Root<T> root,
+            MultivaluedMap<String, String> parameters, List<Predicate> predicates) {
+        String value = parameters.getFirst(name);
+        if (value != null) {
+            String pattern = value.toLowerCase(Locale.ROOT);
+            predicates.add(cb.like(cb.lower(path(root, field.getName())),
+                    startsWith ? pattern + "%" : "%" + pattern));
         }
     }
 
@@ -659,13 +721,10 @@ public class QueryableEngine {
     }
 
     private static Object convertQueryValue(Class<?> type, String value, boolean endOfDay) {
-        if (type != Date.class) {
-            return convert(type, value);
-        }
         try {
-            return date(value, endOfDay);
-        } catch (DateTimeException exception) {
-            throw new BadRequestException("Invalid date: " + value, exception);
+            return type == Date.class ? date(value, endOfDay) : convert(type, value);
+        } catch (IllegalArgumentException | DateTimeException exception) {
+            throw new BadRequestException("Invalid value for " + type.getSimpleName() + ": " + value, exception);
         }
     }
 

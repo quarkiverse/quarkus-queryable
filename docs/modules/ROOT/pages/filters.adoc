@@ -11,11 +11,19 @@ produce validated Criteria API predicates at runtime.
 
 |`@Q`
 |`obj.<field>`
-|Equality; `from.<field>` and `to.<field>` ranges for comparable values
+|Equality, inequality and range comparisons for comparable values
 
 |`@QLike`
 |`like.<field>`
 |Case-insensitive substring
+
+|`@QRLike`
+|`rlike.<field>`
+|Case-insensitive starts with
+
+|`@QLLike`
+|`llike.<field>`
+|Case-insensitive ends with
 
 |`@QList`
 |`obj.<field>`
@@ -42,6 +50,39 @@ produce validated Criteria API predicates at runtime.
 |Default ordering
 |===
 
+== Equality and comparisons
+
+`@Q` enables these parameters for a scalar field. The `name` attribute changes
+the field name used by all parameters; `prefix` changes only the equality
+parameter.
+
+[cols="2,2,2"]
+|===
+|Parameter |Alias |Condition
+|`obj.<field>` | |`=`
+|`not.<field>` | |`<>`
+|`from.<field>` |`gt.<field>` |`>`
+|`efrom.<field>` |`gte.<field>` |`>=`
+|`to.<field>` |`lt.<field>` |`<`
+|`eto.<field>` |`lte.<field>` |`<=`
+|===
+
+For example, `?efrom.price=10&to.price=20` selects prices greater than or
+equal to 10 and strictly less than 20. Comparison parameters require a
+comparable field. `not.<field>` follows SQL null semantics: null values do not
+match an inequality.
+
+Use only one name for an operator on a field in a request, including in its
+`or.` parameters. For example, using both `from.price` and `gt.price`
+returns HTTP 400. Different operators may be combined normally.
+
+IMPORTANT: Earlier Queryable versions treated `from` and `to` as inclusive.
+Replace them with `efrom` and `eto`, respectively, to retain that behavior.
+
+`@QRLike` and `@QLLike` match the beginning and end of a string respectively.
+They use `rlike.<field>` and `llike.<field>` by default and support the `name`
+and `prefix` attributes. Both are case-insensitive, like `@QLike`.
+
 == Class-level filters and collections
 
 Apply `@Q` to an entity class to expose equality filters for its supported
@@ -66,7 +107,8 @@ public class Product extends PanacheEntity {
 ----
 
 `GET /products?obj.name=Book&obj.tags=java` checks equality on `name` and
-membership of `java` in `tags`. A field-level `@Q` can also enable membership
+membership of `java` in `tags`. `not.tags=java` checks non-membership.
+A field-level `@Q` can also enable membership
 without a class-level annotation. Basic element types, including enums, are
 converted to the collection element type; ranges are not supported for
 collections. OR alternatives work with membership and the collection count
@@ -78,10 +120,11 @@ only selected fields should be searchable. Query filters are not authorization.
 
 == `java.util.Date` ranges
 
-`@Q` supports `java.util.Date` for equality and inclusive ranges. For a date
-without a time, UTC is used: `from.createdAt=2026-03-10` starts at
-`2026-03-10T00:00:00.000Z`, and `to.createdAt=2026-03-10` ends at
-`2026-03-10T23:59:59.999Z`. Equality on a date without a time uses the start
+`@Q` supports `java.util.Date` for equality and ranges. A date without a
+time represents a UTC day: `efrom`/`gte` includes its start, `eto`/`lte`
+includes its end, `from`/`gt` starts after its end, and `to`/`lt` ends before
+its start. For example, `efrom.createdAt=2026-03-10&eto.createdAt=2026-03-10`
+includes the entire UTC day. Equality on a date without a time uses the start
 of the UTC day.
 
 An ISO date-time with a UTC offset (such as `2026-03-10T12:30:00+02:00`) is
@@ -103,7 +146,7 @@ GET /customers?or.obj.name=Alice&or.like.surname=rossi
 
 The usual operator is unchanged: `or.obj.name` tests equality, whereas
 `or.like.surname` performs a case-insensitive substring search. `@Q` equality
-and ranges, `@QLike`, `@QList`, `@QLikeList`, `@QNil` and `@QNotNil` are
+and ranges, `@QLike`, `@QRLike`, `@QLLike`, `@QList`, `@QLikeList`, `@QNil` and `@QNotNil` are
 supported, using their configured parameter names. Comma-separated list
 values retain their usual semantics. Each occurrence contributes an
 alternative, including multiple values for the same parameter.

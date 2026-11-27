@@ -14,6 +14,7 @@ import jakarta.persistence.Transient;
 
 import io.quarkiverse.queryable.runtime.Q;
 import io.quarkiverse.queryable.runtime.QLogicalDelete;
+import io.quarkiverse.queryable.runtime.QRLike;
 import io.quarkiverse.queryable.runtime.QRs;
 import io.quarkus.hibernate.orm.panache.PanacheEntity;
 
@@ -24,6 +25,7 @@ public class ClassFilterSample extends PanacheEntity {
     public String name;
 
     @Q(prefix = "exact", name = "label")
+    @QRLike(prefix = "starts", name = "label")
     public String title;
 
     @Temporal(TemporalType.TIMESTAMP)
