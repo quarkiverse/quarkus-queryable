@@ -57,8 +57,8 @@ class ProductResourceTest {
                 .header("listSize", "1");
 
         given().queryParam("obj.labels", "gift")
-                .queryParam("from.availableOn", "2026-03-10")
-                .queryParam("to.availableOn", "2026-03-10")
+                .queryParam("efrom.availableOn", "2026-03-10")
+                .queryParam("eto.availableOn", "2026-03-10")
                 .get("/api/products")
                 .then().statusCode(200)
                 .body("$", hasSize(1))
