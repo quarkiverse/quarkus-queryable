@@ -21,6 +21,7 @@ import jakarta.ws.rs.core.UriInfo;
 
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget;
+import org.jboss.jandex.AnnotationValue;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.FieldInfo;
@@ -37,6 +38,7 @@ import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveMethodBuildItem;
+import io.quarkus.gizmo.AnnotationCreator;
 import io.quarkus.gizmo.ClassCreator;
 import io.quarkus.gizmo.ClassOutput;
 import io.quarkus.gizmo.MethodCreator;
@@ -228,9 +230,6 @@ class QueryableProcessor {
         addParameter(parameterTypes, names, defaults, "startRow", String.class, "0");
         addParameter(parameterTypes, names, defaults, "pageSize", String.class, "10");
         addParameter(parameterTypes, names, defaults, "orderBy", String.class, null);
-        for (String queryParameter : queryParameters) {
-            addParameter(parameterTypes, names, defaults, queryParameter, String.class, null);
-        }
         parameterTypes.add(UriInfo.class);
         names.add("uriInfo");
         defaults.add(null);
@@ -238,6 +237,17 @@ class QueryableProcessor {
         MethodCreator method = creator.getMethodCreator(
                 "list", Response.class, parameterTypes.toArray(Class<?>[]::new));
         method.addAnnotation(GET.class);
+        AnnotationCreator[] documentedParameters = queryParameters.stream()
+                .map(name -> AnnotationCreator.of("org.eclipse.microprofile.openapi.annotations.parameters.Parameter")
+                        .add("name", name)
+                        .add("in", AnnotationValue.createEnumValue("in",
+                                DotName.createSimple("org.eclipse.microprofile.openapi.annotations.enums.ParameterIn"),
+                                "QUERY"))
+                        .add("schema", AnnotationCreator.of("org.eclipse.microprofile.openapi.annotations.media.Schema")
+                                .add("implementation", String.class)))
+                .toArray(AnnotationCreator[]::new);
+        method.addAnnotation("org.eclipse.microprofile.openapi.annotations.parameters.Parameters")
+                .addValue("value", documentedParameters);
         for (int index = 0; index < names.size(); index++) {
             if ("uriInfo".equals(names.get(index))) {
                 method.getParameterAnnotations(index).addAnnotation(Context.class);
@@ -298,6 +308,10 @@ class QueryableProcessor {
             AnnotationInstance like = field.annotation(Q_LIKE);
             if (like != null && executeAlways(like)) {
                 protectedParameters.add(parameterName(field, like, "like", false));
+                String name = fieldName(field, like);
+                protectedParameters.add("notlike." + name);
+                protectedParameters.add("ie." + name);
+                protectedParameters.add("nie." + name);
             }
         }
         for (FieldInfo field : fields) {
@@ -310,6 +324,13 @@ class QueryableProcessor {
                 addParameter(result, field, Q, "obj", protectedParameters);
             }
             addParameter(result, field, Q_LIKE, "like", protectedParameters);
+            AnnotationInstance like = field.annotation(Q_LIKE);
+            if (like != null && !executeAlways(like)) {
+                String name = fieldName(field, like);
+                addQueryParameter(result, "notlike." + name, protectedParameters);
+                addQueryParameter(result, "ie." + name, protectedParameters);
+                addQueryParameter(result, "nie." + name, protectedParameters);
+            }
             addParameter(result, field, Q_R_LIKE, "rlike", protectedParameters);
             addParameter(result, field, Q_L_LIKE, "llike", protectedParameters);
             addParameter(result, field, Q_LIST, "obj", protectedParameters);

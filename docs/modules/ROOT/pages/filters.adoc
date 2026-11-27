@@ -14,8 +14,8 @@ produce validated Criteria API predicates at runtime.
 |Equality, inequality and range comparisons for comparable values
 
 |`@QLike`
-|`like.<field>`
-|Case-insensitive substring
+|`like.<field>`, `notlike.<field>`, `ie.<field>`, `nie.<field>`
+|Case-insensitive substring and negation; empty and non-empty strings
 
 |`@QRLike`
 |`rlike.<field>`
@@ -94,6 +94,44 @@ returns HTTP 400. Different operators may be combined normally.
 
 IMPORTANT: Earlier Queryable versions treated `from` and `to` as inclusive.
 Replace them with `efrom` and `eto`, respectively, to retain that behavior.
+
+== String filters
+
+`@QLike` exposes four parameters:
+
+[cols="2,3"]
+|===
+|Parameter |Condition
+|`like.<field>=value` |Contains the value, ignoring case
+|`notlike.<field>=value` |Does not contain the value, ignoring case
+|`ie.<field>` |Equals the empty string
+|`nie.<field>` |Is not the empty string
+|===
+
+`ie` and `nie` depend only on the presence of the parameter; their value is
+ignored. SQL null semantics apply: null fields do not match `notlike`, `ie` or
+`nie`. Empty strings and nulls may be treated identically by some databases.
+To test for null, use `@QNil` or `@QNotNil` as described above.
+SQL LIKE wildcards in `like` and `notlike` values, such as `%` and `_`,
+retain their wildcard meaning.
+
+The `name` attribute changes the field name for all four parameters; `prefix`
+changes only the positive `like` parameter. With `EXECUTE_ALWAYS`, the fixed
+substring predicate applies instead and all four request parameters are ignored.
+
+[source,java]
+----
+@QLike
+public String description;
+----
+
+[source,text]
+----
+GET /products?like.description=book
+GET /products?notlike.description=book
+GET /products?ie.description
+GET /products?nie.description
+----
 
 == Directional LIKE filters
 
@@ -182,7 +220,8 @@ GET /customers?or.obj.name=Alice&or.like.surname=rossi
 
 The usual operator is unchanged: `or.obj.name` tests equality, whereas
 `or.like.surname` performs a case-insensitive substring search. `@Q` equality,
-inequality and ranges, `@QLike`, `@QRLike`, `@QLLike`, `@QList`, `@QLikeList`,
+inequality and ranges, `@QLike` (including `notlike`, `ie` and `nie`),
+`@QRLike`, `@QLLike`, `@QList`, `@QLikeList`,
 `@QNil` and `@QNotNil` are supported, using their configured parameter names.
 For example, `?or.rlike.name=book&or.lt.price=10` selects names beginning
 with `book` or prices below 10. Comma-separated list values retain their usual
