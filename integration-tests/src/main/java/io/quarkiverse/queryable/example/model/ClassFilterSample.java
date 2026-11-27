@@ -13,6 +13,7 @@ import jakarta.persistence.TemporalType;
 import jakarta.persistence.Transient;
 
 import io.quarkiverse.queryable.runtime.Q;
+import io.quarkiverse.queryable.runtime.QLike;
 import io.quarkiverse.queryable.runtime.QLogicalDelete;
 import io.quarkiverse.queryable.runtime.QRLike;
 import io.quarkiverse.queryable.runtime.QRs;
@@ -24,7 +25,19 @@ import io.quarkus.hibernate.orm.panache.PanacheEntity;
 public class ClassFilterSample extends PanacheEntity {
     public String name;
 
+    public String extra0;
+    public String extra1;
+    public String extra2;
+    public String extra3;
+    public String extra4;
+    public String extra5;
+    public String extra6;
+    public String extra7;
+    public String extra8;
+    public String extra9;
+
     @Q(prefix = "exact", name = "label")
+    @QLike(prefix = "find", name = "label")
     @QRLike(prefix = "starts", name = "label")
     public String title;
 

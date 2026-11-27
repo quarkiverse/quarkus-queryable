@@ -279,6 +279,39 @@ class QueryableResourceTest {
     }
 
     @Test
+    void supportsNegatedLikeAndEmptyStringChecks() {
+        int alpha = createClassFilterSample("alpha", "Alpha", "2026-03-10T00:00:00Z", true);
+        int beta = createClassFilterSample("beta", "bEtA", "2026-03-10T00:00:00Z", true);
+        int empty = createClassFilterSample("empty", "", "2026-03-10T00:00:00Z", true);
+        int nullTitle = given().contentType(ContentType.JSON)
+                .body("""
+                        {"name":"null","title":null,"createdAt":"2026-03-10T00:00:00Z","active":true}
+                        """)
+                .post("/api/class-filters").then().statusCode(201).extract().path("id");
+        try {
+            given().queryParam("find.label", "ALP").get("/api/class-filters")
+                    .then().statusCode(200).body("$", hasSize(1)).body("[0].name", equalTo("alpha"));
+            given().queryParam("notlike.label", "aLp").get("/api/class-filters")
+                    .then().statusCode(200).body("$", hasSize(2))
+                    .body("name", hasItem("beta")).body("name", hasItem("empty"));
+            given().get("/api/class-filters?ie.label").then().statusCode(200)
+                    .body("$", hasSize(1)).body("[0].name", equalTo("empty"));
+            given().get("/api/class-filters?nie.label").then().statusCode(200)
+                    .body("$", hasSize(2)).body("name", hasItem("alpha")).body("name", hasItem("beta"));
+            given().queryParam("or.ie.label", "").queryParam("or.notlike.label", "ALP")
+                    .get("/api/class-filters").then().statusCode(200).body("$", hasSize(2));
+            given().queryParam("or.nie.label", "").queryParam("obj.name", "beta")
+                    .get("/api/class-filters").then().statusCode(200).body("$", hasSize(1));
+            given().queryParam("or.notlike.name", "a")
+                    .get("/api/options").then().statusCode(400);
+        } finally {
+            for (int id : new int[] { alpha, beta, empty, nullTitle }) {
+                given().delete("/api/class-filters/" + id).then().statusCode(204);
+            }
+        }
+    }
+
+    @Test
     void appliesWholeDayBoundariesAndNegatedCollectionMembership() {
         int first = createClassFilterSample("early", "first", "2026-03-10T00:00:00Z", true);
         int last = createClassFilterSample("late", "last", "2026-03-10T23:59:59.999Z", true);
@@ -297,6 +330,8 @@ class QueryableResourceTest {
                     .body("$", hasSize(1)).body("[0].name", equalTo("early"));
             given().queryParam("gt.id", "not-a-number").get("/api/class-filters")
                     .then().statusCode(400);
+            given().queryParam("obj.extra9", "indexed").get("/api/class-filters")
+                    .then().statusCode(200).body("$", hasSize(3));
             given().queryParam("or.not.tags", "java").queryParam("or.obj.name", "next")
                     .get("/api/class-filters").then().statusCode(200).body("$", hasSize(1));
         } finally {
@@ -309,7 +344,7 @@ class QueryableResourceTest {
     private int createClassFilterSample(String name, String title, String date, boolean active) {
         return given().contentType(ContentType.JSON)
                 .body("""
-                        {"name":"%s","title":"%s","createdAt":"%s",
+                        {"name":"%s","title":"%s","createdAt":"%s","extra9":"indexed",
                          "tags":["java","quarkus"],"ratings":[7,9],"active":%s}
                         """.formatted(name, title, date, active))
                 .post("/api/class-filters").then().statusCode(201).extract().path("id");
@@ -560,6 +595,11 @@ class QueryableResourceTest {
         assertThat(document.getList("paths['/api/class-filters'].get.parameters.name"), hasItem("obj.id"));
         assertThat(document.getList("paths['/api/class-filters'].get.parameters.name"), hasItem("exact.label"));
         assertThat(document.getList("paths['/api/class-filters'].get.parameters.name"), hasItem("starts.label"));
+        assertThat(document.getList("paths['/api/class-filters'].get.parameters.name"), hasItem("or.lte.extra9"));
+        assertThat(document.getList("paths['/api/class-filters'].get.parameters.name"), hasItem("notlike.label"));
+        assertThat(document.getList("paths['/api/class-filters'].get.parameters.name"), hasItem("or.ie.label"));
+        assertThat(document.getList("paths['/api/class-filters'].get.parameters.name"), hasItem("nie.label"));
+        assertThat(document.getList("paths['/api/options'].get.parameters.name"), not(hasItem("notlike.name")));
         assertThat(document.getList("paths['/api/class-filters'].get.parameters.name"), hasItem("from.createdAt"));
         assertThat(document.getList("paths['/api/class-filters'].get.parameters.name"), hasItem("or.obj.tags"));
         assertThat(document.getList("paths['/api/class-filters'].get.parameters.name"), not(hasItem("from.tags")));

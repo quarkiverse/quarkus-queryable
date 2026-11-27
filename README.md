@@ -44,6 +44,9 @@ The generated collection endpoint accepts filters such as:
 
 ```text
 GET /api/developers?like.surname=pi
+GET /api/developers?notlike.surname=pi
+GET /api/developers?ie.surname
+GET /api/developers?nie.surname
 GET /api/developers?rlike.surname=pi
 GET /api/developers?llike.surname=zza
 GET /api/developers?gte.experienceYears=3&lt.experienceYears=10
@@ -118,7 +121,8 @@ implementation 'io.quarkiverse.queryable:quarkus-queryable:4.0.3'
 
 - Annotation-driven filters, sorting and logical deletion.
 - Equality, inequality and inclusive or exclusive range filters with `@Q`.
-- Case-insensitive substring, starts-with and ends-with filters.
+- Case-insensitive substring, negated substring, starts-with and ends-with filters.
+- Empty and non-empty string checks with `@QLike`.
 - Hibernate filter integration with `@QFilter`.
 - Custom filters through `QueryableFilter<T>` and the Criteria API.
 - REST lifecycle callbacks through `QueryableRsListener<T>`.

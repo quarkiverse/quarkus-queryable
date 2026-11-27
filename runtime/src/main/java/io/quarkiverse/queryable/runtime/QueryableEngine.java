@@ -260,13 +260,28 @@ public class QueryableEngine {
             QLike like = field.getAnnotation(QLike.class);
             if (like != null) {
                 String name = parameterName(like.prefix(), like.name(), field);
+                String notLike = parameterName("notlike", like.name(), field);
+                String empty = parameterName("ie", like.name(), field);
+                String notEmpty = parameterName("nie", like.name(), field);
                 if (fixedCondition(field, like.options(), like.condition(), "@QLike")) {
                     rejectOr(parameters, name, "EXECUTE_ALWAYS cannot be used in OR");
+                    rejectOr(parameters, notLike, "EXECUTE_ALWAYS cannot be used in OR");
+                    rejectOr(parameters, empty, "EXECUTE_ALWAYS cannot be used in OR");
+                    rejectOr(parameters, notEmpty, "EXECUTE_ALWAYS cannot be used in OR");
                     addLikeValue(field, like.condition(), cb, root, predicates);
                 } else {
                     addLike(field, name, cb, root, parameters, predicates);
                     addOrValues(name, parameters, handledOrParameters, alternatives,
                             single -> addLike(field, name, cb, root, single, alternatives));
+                    addNotLike(field, notLike, cb, root, parameters, predicates);
+                    addOrValues(notLike, parameters, handledOrParameters, alternatives,
+                            single -> addNotLike(field, notLike, cb, root, single, alternatives));
+                    addEmpty(field, empty, false, cb, root, parameters, predicates);
+                    addOrValues(empty, parameters, handledOrParameters, alternatives,
+                            single -> addEmpty(field, empty, false, cb, root, single, alternatives));
+                    addEmpty(field, notEmpty, true, cb, root, parameters, predicates);
+                    addOrValues(notEmpty, parameters, handledOrParameters, alternatives,
+                            single -> addEmpty(field, notEmpty, true, cb, root, single, alternatives));
                 }
             }
             QRLike rightLike = field.getAnnotation(QRLike.class);
@@ -570,6 +585,23 @@ public class QueryableEngine {
             List<Predicate> predicates) {
         predicates.add(cb.like(cb.lower(path(root, field.getName())),
                 "%" + value.toLowerCase(Locale.ROOT) + "%"));
+    }
+
+    private <T> void addNotLike(Field field, String name, CriteriaBuilder cb, Root<T> root,
+            MultivaluedMap<String, String> parameters, List<Predicate> predicates) {
+        String value = parameters.getFirst(name);
+        if (value != null) {
+            predicates.add(cb.notLike(cb.lower(path(root, field.getName())),
+                    "%" + value.toLowerCase(Locale.ROOT) + "%"));
+        }
+    }
+
+    private <T> void addEmpty(Field field, String name, boolean negate, CriteriaBuilder cb, Root<T> root,
+            MultivaluedMap<String, String> parameters, List<Predicate> predicates) {
+        if (parameters.containsKey(name)) {
+            predicates.add(negate ? cb.notEqual(path(root, field.getName()), "")
+                    : cb.equal(path(root, field.getName()), ""));
+        }
     }
 
     private <T> void addList(Field field, String parameterName, CriteriaBuilder cb, Root<T> root,
