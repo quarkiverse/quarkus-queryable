@@ -3,7 +3,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>dev.queryable</groupId>
+        <groupId>io.quarkiverse.queryable</groupId>
         <artifactId>quarkus-queryable-parent</artifactId>
         <version>4.0.3</version>
     </parent>
@@ -32,7 +32,7 @@
             <artifactId>quarkus-rest-deployment</artifactId>
         </dependency>
         <dependency>
-            <groupId>dev.queryable</groupId>
+            <groupId>io.quarkiverse.queryable</groupId>
             <artifactId>quarkus-queryable</artifactId>
             <version>${project.version}</version>
         </dependency>
