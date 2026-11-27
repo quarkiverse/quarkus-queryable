@@ -1,4 +1,5 @@
 [![Version](https://img.shields.io/maven-central/v/io.quarkiverse.queryable/quarkus-queryable?logo=apache-maven&style=flat-square)](https://central.sonatype.com/artifact/io.quarkiverse.queryable/quarkus-queryable)
+[![Build](https://img.shields.io/github/actions/workflow/status/quarkiverse/quarkus-queryable/build.yml?branch=main&logo=GitHub&style=flat-square)](https://github.com/quarkiverse/quarkus-queryable/actions?query=workflow%3ABuild)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=flat-square)](https://www.apache.org/licenses/LICENSE-2.0)
 
 # Quarkus Queryable
@@ -54,6 +55,9 @@ GET    /api/developers/count
 
 ## Installation
 
+> These Quarkiverse coordinates are not published yet. They will be available
+> from Maven Central after the first Quarkiverse release.
+
 ### Quarkus CLI
 
 ```bash
@@ -72,7 +76,7 @@ quarkus create app my-app -x=io.quarkiverse.queryable:quarkus-queryable
 <dependency>
     <groupId>io.quarkiverse.queryable</groupId>
     <artifactId>quarkus-queryable</artifactId>
-    <version>4.0.3</version>
+    <version>3.0.0</version>
 </dependency>
 ```
 
@@ -92,7 +96,7 @@ Applications must also include a JDBC driver and a JSON extension, for example:
 ### Gradle
 
 ```groovy
-implementation 'io.quarkiverse.queryable:quarkus-queryable:4.0.3'
+implementation 'io.quarkiverse.queryable:quarkus-queryable:3.0.0'
 ```
 
 ## Features
@@ -105,11 +109,11 @@ implementation 'io.quarkiverse.queryable:quarkus-queryable:4.0.3'
 
 ## Documentation
 
-- [Getting started](docs/modules/ROOT/pages/index.adoc)
-- [Query filters](docs/modules/ROOT/pages/filters.adoc)
-- [REST lifecycle](docs/modules/ROOT/pages/lifecycle.adoc)
-- [Security](docs/modules/ROOT/pages/security.adoc)
-- [Testing](docs/modules/ROOT/pages/testing.adoc)
+- [Getting started](https://quarkiverse.github.io/quarkiverse-docs/quarkus-queryable/dev/index.html)
+- [Query filters](https://quarkiverse.github.io/quarkiverse-docs/quarkus-queryable/dev/filters.html)
+- [REST lifecycle](https://quarkiverse.github.io/quarkiverse-docs/quarkus-queryable/dev/lifecycle.html)
+- [Security](https://quarkiverse.github.io/quarkiverse-docs/quarkus-queryable/dev/security.html)
+- [Testing](https://quarkiverse.github.io/quarkiverse-docs/quarkus-queryable/dev/testing.html)
 
 ## Building from source
 
