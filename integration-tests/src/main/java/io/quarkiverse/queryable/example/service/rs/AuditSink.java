@@ -11,6 +11,10 @@ import io.quarkiverse.queryable.runtime.QueryableOperation;
 public class AuditSink {
     private final List<String> events = new CopyOnWriteArrayList<>();
 
+    public void add(String event) {
+        events.add(event);
+    }
+
     public void add(QueryableOperation operation, Long id) {
         events.add(operation + ":" + id);
     }
