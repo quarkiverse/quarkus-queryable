@@ -17,7 +17,7 @@ class ProductResourceTest {
                 .contentType(ContentType.JSON)
                 .body("""
                         {"name":"Quarkus mug","price":19.90,"active":true,"visibility":"PUBLIC",
-                         "availableOn":"2026-03-10T23:59:59Z","labels":["mug","gift"]}
+                         "tags":"react,java","availableOn":"2026-03-10T23:59:59Z","labels":["mug","gift"]}
                         """)
                 .post("/api/products")
                 .then()
@@ -30,6 +30,13 @@ class ProductResourceTest {
                 .statusCode(200)
                 .body("$", hasSize(1))
                 .body("[0].name", equalTo("Quarkus mug"));
+
+        given().queryParam("like.tags", "missing,java")
+                .get("/api/products")
+                .then()
+                .statusCode(200)
+                .body("$", hasSize(1))
+                .header("listSize", "1");
 
         given().queryParam("min.price", "20")
                 .get("/api/products")

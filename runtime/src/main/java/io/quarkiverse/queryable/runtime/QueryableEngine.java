@@ -36,6 +36,7 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.Transient;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.CriteriaSelect;
 import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
@@ -96,10 +97,10 @@ public class QueryableEngine {
         countQuery.select(cb.count(countRoot));
         List<Predicate> countPredicates = predicates(entityType, cb, countRoot, parameters);
         if (!countPredicates.isEmpty()) {
-            countQuery.where(countPredicates.toArray(Predicate[]::new));
+            countQuery.where(countPredicates);
         }
         try (HibernateFilterScope ignored = HibernateFilterScope.open(entityManager, entityType, parameters)) {
-            total = entityManager.createQuery(countQuery).getSingleResult();
+            total = entityManager.createQuery((CriteriaSelect<Long>) countQuery).getSingleResult();
         }
 
         CriteriaQuery<T> query = cb.createQuery(entityType);
@@ -107,11 +108,11 @@ public class QueryableEngine {
         query.select(root);
         List<Predicate> predicates = predicates(entityType, cb, root, parameters);
         if (!predicates.isEmpty()) {
-            query.where(predicates.toArray(Predicate[]::new));
+            query.where(predicates);
         }
         applyOrder(cb, query, root, parameters.getFirst("orderBy"), entityType);
         try (HibernateFilterScope ignored = HibernateFilterScope.open(entityManager, entityType, parameters)) {
-            var typedQuery = entityManager.createQuery(query);
+            var typedQuery = entityManager.createQuery((CriteriaSelect<T>) query);
             if (pageSize > 0) {
                 typedQuery.setFirstResult(startRow).setMaxResults(pageSize);
             }
@@ -350,7 +351,7 @@ public class QueryableEngine {
             }
         }
         if (!alternatives.isEmpty()) {
-            predicates.add(cb.or(alternatives.toArray(Predicate[]::new)));
+            predicates.add(cb.or(alternatives));
         } else if (parameters.keySet().stream().anyMatch(name -> name.startsWith("or."))) {
             throw new BadRequestException("No predicate was produced for OR query parameters");
         }
@@ -632,7 +633,7 @@ public class QueryableEngine {
                         "%" + item.toLowerCase(Locale.ROOT) + "%"))
                 .toList();
         if (!alternatives.isEmpty()) {
-            predicates.add(cb.or(alternatives.toArray(Predicate[]::new)));
+            predicates.add(cb.or(alternatives));
         }
     }
 
