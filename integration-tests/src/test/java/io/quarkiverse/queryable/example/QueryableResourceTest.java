@@ -470,7 +470,9 @@ class QueryableResourceTest {
 
         authenticated().get("/api/v1/customers/count").then().statusCode(200)
                 .body(is("3"));
-        given().get("/test/audit").then().body("$", hasSize(0));
+        given().get("/test/audit").then()
+                .body("$", hasItem("LISTENER:BEFORE:CREATE"))
+                .body("$", not(hasItem("LISTENER:AFTER:CREATE")));
     }
 
     @Test
@@ -484,7 +486,9 @@ class QueryableResourceTest {
         authenticated().get("/api/v1/customers/1").then().statusCode(200)
                 .body("name", equalTo("Mario Rossi"))
                 .body("externalCode", equalTo("IT-001"));
-        given().get("/test/audit").then().body("$", hasSize(0));
+        given().get("/test/audit").then()
+                .body("$", hasItem("LISTENER:BEFORE:UPDATE"))
+                .body("$", not(hasItem("LISTENER:AFTER:UPDATE")));
     }
 
     @Test

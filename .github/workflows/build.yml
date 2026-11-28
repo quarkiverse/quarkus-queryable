@@ -37,5 +37,11 @@ jobs:
           cache: 'maven'
           distribution: 'temurin'
 
-      - name: Build with Maven
-        run: mvn formatter:validate verify
+      - name: Build, test, and install extension
+        run: mvn -B -ntp clean formatter:validate install
+
+      - name: Test consumer on Quarkus 4
+        run: mvn -B -ntp -f consumer-tests/pom.xml -Dquarkus.version=4.0.1 clean test
+
+      - name: Test same artifact on Quarkus 3
+        run: mvn -B -ntp -f consumer-tests/pom.xml -Dquarkus.version=3.40.1 clean test
