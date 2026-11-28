@@ -40,8 +40,14 @@ jobs:
       - name: Build, test, and install extension
         run: mvn -B -ntp clean formatter:validate install
 
+      - name: Determine installed extension version
+        run: |
+          version=$(mvn -q -N -DforceStdout help:evaluate -Dexpression=project.version)
+          test -n "$version"
+          echo "QUERYABLE_VERSION=$version" >> "$GITHUB_ENV"
+
       - name: Test consumer on Quarkus 4
-        run: mvn -B -ntp -f consumer-tests/pom.xml -Dquarkus.version=4.0.1 clean test
+        run: mvn -B -ntp -f consumer-tests/pom.xml -Dqueryable.version="$QUERYABLE_VERSION" -Dquarkus.version=4.0.1 clean test
 
       - name: Test same artifact on Quarkus 3
-        run: mvn -B -ntp -f consumer-tests/pom.xml -Dquarkus.version=3.40.1 clean test
+        run: mvn -B -ntp -f consumer-tests/pom.xml -Dqueryable.version="$QUERYABLE_VERSION" -Dquarkus.version=3.40.1 clean test
