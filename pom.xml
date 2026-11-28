@@ -8,7 +8,7 @@
     </parent>
     <groupId>io.quarkiverse.queryable</groupId>
     <artifactId>quarkus-queryable-parent</artifactId>
-    <version>3.16</version>
+    <version>3.17-SNAPSHOT</version>
     <packaging>pom</packaging>
     <name>Quarkus Queryable - Parent</name>
     <description>Queryable collection filters for Quarkus Hibernate ORM REST Data with Panache.</description>
@@ -38,7 +38,7 @@
         <connection>scm:git:git@github.com:quarkiverse/quarkus-queryable.git</connection>
         <developerConnection>scm:git:git@github.com:quarkiverse/quarkus-queryable.git</developerConnection>
         <url>https://github.com/quarkiverse/quarkus-queryable</url>
-        <tag>3.16</tag>
+        <tag>3.0.0</tag>
     </scm>
 
     <properties>
