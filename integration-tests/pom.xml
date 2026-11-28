@@ -4,7 +4,7 @@
     <parent>
         <groupId>io.quarkiverse.queryable</groupId>
         <artifactId>quarkus-queryable-parent</artifactId>
-        <version>4.0.4</version>
+        <version>4.0.5-SNAPSHOT</version>
     </parent>
     <artifactId>quarkus-queryable-integration-tests</artifactId>
     <name>Quarkus Queryable - Integration tests</name>
