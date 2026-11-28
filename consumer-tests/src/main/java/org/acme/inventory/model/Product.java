@@ -3,6 +3,7 @@ package org.acme.inventory.model;
 import io.quarkiverse.queryable.runtime.Q;
 import io.quarkiverse.queryable.runtime.QFilter;
 import io.quarkiverse.queryable.runtime.QLike;
+import io.quarkiverse.queryable.runtime.QLikeList;
 import io.quarkiverse.queryable.runtime.QLogicalDelete;
 import io.quarkiverse.queryable.runtime.QOption;
 import io.quarkiverse.queryable.runtime.QOrderBy;
@@ -43,6 +44,9 @@ public class Product extends PanacheEntityBase {
 
     @QLike
     public String name;
+
+    @QLikeList
+    public String tags;
 
     @Q
     public BigDecimal price;
