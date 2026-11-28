@@ -8,7 +8,7 @@
     </parent>
     <groupId>io.quarkiverse.queryable</groupId>
     <artifactId>quarkus-queryable-parent</artifactId>
-    <version>4.0.3</version>
+    <version>4.0.4-SNAPSHOT</version>
     <packaging>pom</packaging>
     <name>Quarkus Queryable - Parent</name>
     <description>Queryable collection filters for Quarkus Hibernate ORM REST Data with Panache.</description>
@@ -47,7 +47,7 @@
         <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-        <quarkus.version>3.39.5</quarkus.version>
+        <quarkus.version>4.0.1</quarkus.version>
         <surefire-plugin.version>3.5.4</surefire-plugin.version>
     </properties>
 

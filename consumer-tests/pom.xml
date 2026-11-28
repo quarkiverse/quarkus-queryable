@@ -10,8 +10,8 @@
     <properties>
         <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <queryable.version>4.0.3</queryable.version>
-        <quarkus.version>3.39.5</quarkus.version>
+        <queryable.version>4.0.4-SNAPSHOT</queryable.version>
+        <quarkus.version>4.0.1</quarkus.version>
     </properties>
 
     <dependencyManagement>
