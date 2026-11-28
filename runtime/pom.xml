@@ -5,7 +5,7 @@
     <parent>
         <groupId>io.quarkiverse.queryable</groupId>
         <artifactId>quarkus-queryable-parent</artifactId>
-        <version>3.16-SNAPSHOT</version>
+        <version>3.16</version>
     </parent>
     <artifactId>quarkus-queryable</artifactId>
     <name>Quarkus Queryable - Runtime</name>
