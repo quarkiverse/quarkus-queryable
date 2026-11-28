@@ -86,7 +86,7 @@ quarkus create app my-app -x=io.quarkiverse.queryable:quarkus-queryable
 <dependency>
     <groupId>io.quarkiverse.queryable</groupId>
     <artifactId>quarkus-queryable</artifactId>
-    <version>4.0.3</version>
+    <version>4.0.4</version>
 </dependency>
 ```
 
@@ -106,7 +106,7 @@ Applications must also include a JDBC driver and a JSON extension, for example:
 ### Gradle
 
 ```groovy
-implementation 'io.quarkiverse.queryable:quarkus-queryable:4.0.3'
+implementation 'io.quarkiverse.queryable:quarkus-queryable:4.0.4'
 ```
 
 ## Documentation
