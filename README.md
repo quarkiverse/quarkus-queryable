@@ -146,6 +146,13 @@ mvn install -DskipTests
 mvn -f consumer-tests/pom.xml test
 ```
 
+## Releasing
+
+For a `main` release, update the versions in `.github/project.yml`, then
+manually run **Quarkiverse Prepare Release** on `main`. Once it succeeds,
+manually run **Quarkiverse Perform Release** with the generated tag to publish
+the release.
+
 ## License
 
 This project is licensed under the [Apache License 2.0](LICENSE).
