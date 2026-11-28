@@ -13,8 +13,7 @@ public class CustomerFilter extends CustomerFilterBase<Customer> {
     public void contribute(QueryableFilterContext<Customer> context) {
         String city = context.param("address.city");
         if (city != null) {
-            context.add(context.criteriaBuilder().equal(
-                    context.root().get("address").get("city"), city));
+            context.add(context.root().get("address").get("city").in(context.params("address.city")));
         }
         for (String alternative : context.orParams("address.city")) {
             context.addOr(context.criteriaBuilder().equal(
